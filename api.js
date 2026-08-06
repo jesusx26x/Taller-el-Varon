@@ -6,8 +6,7 @@
 // Si colocas la URL del despliegue de Apps Script aquí, se conectará a Google Sheets.
 // Si se deja vacío, utilizará el almacenamiento local (localStorage) con datos demo iniciales.
 const CONFIG = {
-  // Ejemplo: "https://script.google.com/macros/s/AKfycb.../exec"
-  API_URL: localStorage.getItem("taller_api_url") || "",
+  API_URL: localStorage.getItem("taller_api_url") || "https://script.google.com/macros/s/AKfycbzxuBcAfHGUDdtSoou9I9i_ZT-kl58YCFb2F-Sxm1iPi2BeHpb3Z_ijIUbdMRaBZazj/exec",
   TOKEN_KEY: "taller_session_token",
   USER_KEY: "taller_user_info",
   LOCAL_DB_KEY: "taller_el_varon_db_v1"
