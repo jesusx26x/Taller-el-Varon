@@ -64,7 +64,7 @@ const PRINT_MODULE = {
               <span class="brand-chip">FORD</span>
             </div>
             <p style="font-size: 0.78rem; color: #475569; margin-top: 0.5rem;">
-              <i class="fas fa-location-dot"></i> Calle Faisán, No. 83, Los Alcarrizos II, Santo Domingo Oeste<br>
+              <i class="fas fa-location-dot"></i> Calle Faisán, No. 83, Los Americanos II, Los Alcarrizos, Santo Domingo Oeste<br>
               <i class="fas fa-user-gear"></i> Propietario: Pablo Rosario | <i class="fab fa-whatsapp"></i> (829)-941-9044 | <i class="fas fa-clock"></i> 8:30 AM – 7:30 PM
             </p>
           </div>
