@@ -482,8 +482,10 @@ function renderOrdenDetalle(ordenId) {
   const ordenes = STATE.db ? (STATE.db.ordenes || []) : [];
 
   const ord = ordenes.find(o => {
-    const norm = normalizeOrderId(o.id);
-    return norm === targetClean || norm.endsWith(targetClean) || targetClean.endsWith(norm);
+    if (!o || !o.id) return false;
+    const rawId = String(o.id).trim();
+    const norm = normalizeOrderId(rawId);
+    return norm === targetClean || rawId === ordenId || norm.endsWith(targetClean) || targetClean.endsWith(norm);
   });
 
   if (!ord) {
@@ -498,77 +500,120 @@ function renderOrdenDetalle(ordenId) {
     return;
   }
 
-  const cli = (STATE.db.clientes || []).find(c => String(c.id) === String(ord.clienteId)) || { nombre: "Desconocido", telefono: "N/A" };
-  const veh = (STATE.db.vehiculos || []).find(v => String(v.id) === String(ord.vehiculoId)) || { marca: "", modelo: "", año: "", color: "", placa: "" };
+  const cliRaw = (STATE.db.clientes || []).find(c => String(c.id) === String(ord.clienteId)) || {};
+  const vehRaw = (STATE.db.vehiculos || []).find(v => String(v.id) === String(ord.vehiculoId)) || {};
+
+  const cli = {
+    nombre: String(cliRaw.nombre || "Cliente Desconocido"),
+    telefono: String(cliRaw.telefono || "N/A"),
+    cedula: String(cliRaw.cedula || "N/D")
+  };
+
+  const veh = {
+    marca: String(vehRaw.marca || ""),
+    modelo: String(vehRaw.modelo || ""),
+    año: String(vehRaw.año || ""),
+    color: String(vehRaw.color || ""),
+    placa: String(vehRaw.placa || "")
+  };
+
   const detalles = (STATE.db.detalleServicios || []).filter(d => String(d.ordenId) === String(ord.id));
   const fotos = (STATE.db.fotos || []).filter(f => String(f.ordenId) === String(ord.id));
 
-  const telClean = String(cli.telefono || '').replace(/\D/g, '');
+  const telClean = cli.telefono.replace(/\D/g, "");
+  const kmVal = Number(ord.kilometrajeEntrada) || 0;
+  const kmText = kmVal > 0 ? kmVal.toLocaleString("es-DO") + " km" : "N/D";
+
+  // DEFINICIÓN DE ESTADOS Y TRACKER VISUAL DE AVANCE
+  const estadosList = [
+    { key: "Pendiente", icon: "fa-clock", label: "1. Pendiente" },
+    { key: "En Proceso", icon: "fa-wrench", label: "2. En Proceso" },
+    { key: "Listo", icon: "fa-check-circle", label: "3. Listo" },
+    { key: "Entregado", icon: "fa-flag-checkered", label: "4. Entregado" }
+  ];
+
+  const currentIdx = estadosList.findIndex(e => e.key === ord.estado);
+
+  const trackerHtml = `
+    <div class="status-tracker-container">
+      <div class="status-tracker-title">
+        <span><i class="fas fa-route"></i> Flujo de Avance del Vehículo</span>
+        <span>Estado Actual: <strong style="color: var(--color-primary);">${ord.estado}</strong></span>
+      </div>
+      <div class="status-tracker-steps">
+        ${estadosList.map((st, i) => {
+          let stepClass = "";
+          if (i === currentIdx) stepClass = "active";
+          else if (i < currentIdx) stepClass = "completed";
+          return `
+            <button class="status-step-item ${stepClass}" onclick="cambiarEstadoOrden('${ord.id}', '${st.key}')" title="Haga clic para cambiar a estado ${st.key}">
+              <div class="status-step-icon"><i class="fas ${st.icon}"></i></div>
+              <div class="status-step-label">${st.label}</div>
+            </button>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
 
   const fotosHtml = fotos.length > 0
     ? fotos.map(f => `
         <div style="position: relative; display: inline-block; margin: 0.4rem;">
           <a href="${f.url}" target="_blank">
-            <img src="${f.url}" style="width: 140px; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);" title="${f.descripcion}">
+            <img src="${f.url}" style="width: 130px; height: 95px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);" title="${f.descripcion || ''}">
           </a>
-          <p style="font-size: 0.7rem; color: var(--text-muted); width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${f.descripcion || 'Sin nota'}</p>
+          <p style="font-size: 0.72rem; color: var(--text-muted); width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 0.2rem;">${f.descripcion || 'Sin nota'}</p>
         </div>
       `).join("")
     : `<p style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">No hay fotos registradas para esta orden.</p>`;
 
   const detallesHtml = detalles.map((item, idx) => `
     <tr>
-      <td>${idx + 1}</td>
+      <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
       <td><span class="badge ${item.tipo === 'Repuesto' ? 'badge-pending' : 'badge-process'}">${item.tipo}</span></td>
-      <td>${item.descripcion}</td>
-      <td style="text-align: center;">${item.cantidad}</td>
-      <td style="text-align: right;">${UTILS.formatMoney(item.precioUnitario)}</td>
-      <td style="text-align: right; font-weight: bold; color: var(--color-accent-red);">${UTILS.formatMoney(item.subtotal)}</td>
+      <td><strong>${item.descripcion}</strong></td>
+      <td style="text-align: center;" class="tabular-nums">${item.cantidad}</td>
+      <td style="text-align: right;" class="tabular-nums">${UTILS.formatMoney(item.precioUnitario)}</td>
+      <td style="text-align: right; font-weight: bold; color: var(--color-accent-red);" class="tabular-nums">${UTILS.formatMoney(item.subtotal)}</td>
     </tr>
   `).join("");
 
   container.innerHTML = `
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 1rem;">
+    <!-- TRACKER DE AVANCE FLUIDO -->
+    ${trackerHtml}
 
-      <!-- COLUMNA PRINCIPAL -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
+
+      <!-- COLUMNA PRINCIPAL (INFORMACIÓN Y TRABAJOS) -->
       <div>
         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-card);">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
             <div>
-              <h2 style="color: var(--color-primary);">ÓRDEN N° ${ord.id}</h2>
-              <p style="color: var(--text-muted); font-size: 0.85rem;">Ingreso: ${UTILS.formatDate(ord.fechaIngreso, true)}</p>
+              <h2 style="color: var(--color-primary); font-size: 1.4rem;">ÓRDEN DE TRABAJO #${ord.id}</h2>
+              <p style="color: var(--text-muted); font-size: 0.85rem;">Fecha Ingreso: ${UTILS.formatDate(ord.fechaIngreso, true)}</p>
             </div>
             <div>
               ${UTILS.getStatusBadgeHtml(ord.estado)}
             </div>
           </div>
 
-          <div style="background: #F8F9FA; padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 1rem;">
-            <p style="font-size: 0.9rem;"><strong>Motivo de Ingreso:</strong></p>
-            <p style="color: var(--text-main); font-size: 1rem; margin-top: 0.2rem;">${ord.motivoVisita}</p>
-            ${ord.diagnostico ? `<p style="font-size: 0.85rem; color: var(--color-secondary); margin-top: 0.5rem;"><strong>Diagnóstico Técnico:</strong> ${ord.diagnostico}</p>` : ''}
+          <div style="background: #F8F9FA; padding: 1.1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.25rem;">
+            <p style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px;">Motivo de Ingreso / Síntomas:</p>
+            <p style="color: var(--text-main); font-size: 1.05rem; font-weight: 500; margin-top: 0.3rem;">${ord.motivoVisita || 'N/D'}</p>
+            ${ord.diagnostico ? `<div style="margin-top: 0.8rem; padding-top: 0.6rem; border-top: 1px dashed #CBD5E1;"><p style="font-size: 0.85rem; color: var(--color-secondary); font-weight: 600;"><i class="fas fa-stethoscope"></i> Diagnóstico Técnico:</p><p style="color: var(--text-main); font-size: 0.95rem; margin-top: 0.2rem;">${ord.diagnostico}</p></div>` : ''}
           </div>
 
-          <!-- BOTONES DE CAMBIO DE ESTADO -->
-          <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; align-items: center;">
-            <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Cambiar Estado:</span>
-            <button class="btn btn-secondary btn-sm" onclick="cambiarEstadoOrden('${ord.id}', 'Pendiente')">🟡 Pendiente</button>
-            <button class="btn btn-secondary btn-sm" onclick="cambiarEstadoOrden('${ord.id}', 'En Proceso')">🔵 En Proceso</button>
-            <button class="btn btn-secondary btn-sm" onclick="cambiarEstadoOrden('${ord.id}', 'Listo')">🟢 Listo</button>
-            <button class="btn btn-success btn-sm" onclick="cambiarEstadoOrden('${ord.id}', 'Entregado')">🏁 Entregado al Cliente</button>
-          </div>
-
-          <!-- TABLA DE TRABAJOS Y REPUESTOS -->
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
-            <h3>Trabajos y Piezas Utilizadas</h3>
-            <button class="btn btn-primary btn-sm" onclick="abrirModalAgregarItem('${ord.id}')"><i class="fas fa-plus"></i> Añadir Ítem / Cobro</button>
+          <!-- ENCABEZADO Y BOTÓN AÑADIR ÍTEM -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; flex-wrap: wrap; gap: 0.5rem;">
+            <h3 style="font-size: 1.05rem; color: var(--color-primary);"><i class="fas fa-list-check"></i> Trabajos y Repuestos</h3>
+            <button class="btn btn-primary btn-sm" onclick="abrirModalAgregarItem('${ord.id}')"><i class="fas fa-plus"></i> Añadir Trabajo / Pieza</button>
           </div>
 
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>#</th>
+                  <th style="width: 40px; text-align: center;">#</th>
                   <th>Tipo</th>
                   <th>Descripción</th>
                   <th style="text-align: center;">Cant</th>
@@ -577,60 +622,59 @@ function renderOrdenDetalle(ordenId) {
                 </tr>
               </thead>
               <tbody>
-                ${detalles.length > 0 ? detallesHtml : '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Aún no se han agregado ítems o costos.</td></tr>'}
+                ${detalles.length > 0 ? detallesHtml : '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem 1rem;">No se han agregado trabajos o repuestos a esta orden. Presione "+ Añadir Trabajo / Pieza".</td></tr>'}
               </tbody>
               <tfoot>
                 <tr style="background: rgba(206, 17, 38, 0.06); font-size: 1.1rem; font-weight: 700;">
-                  <td colspan="5" style="text-align: right;">TOTAL GENERAL:</td>
-                  <td style="text-align: right; color: var(--color-accent-red);">${UTILS.formatMoney(ord.montoTotal)}</td>
+                  <td colspan="5" style="text-align: right;">TOTAL A COBRAR (RD$):</td>
+                  <td style="text-align: right; color: var(--color-accent-red);" class="tabular-nums">${UTILS.formatMoney(ord.montoTotal)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
-
         </div>
 
-        <!-- FOTOS -->
+        <!-- EVIDENCIA FOTOGRÁFICA -->
         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem; box-shadow: var(--shadow-card);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <h3>Evidencia Fotográfica (${fotos.length})</h3>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+            <h3 style="font-size: 1.05rem; color: var(--color-primary);"><i class="fas fa-camera"></i> Fotos de Evidencia (${fotos.length})</h3>
             <button class="btn btn-secondary btn-sm" onclick="abrirModalSubirFoto('${ord.id}')"><i class="fas fa-camera"></i> Subir Foto</button>
           </div>
-          <div>
-            ${fotosHtml}
-          </div>
+          <div>${fotosHtml}</div>
         </div>
       </div>
 
-      <!-- COLUMNA LATERAL (INFO CLIENTE Y VEHÍCULO) -->
+      <!-- COLUMNA LATERAL (RESUMEN CLIENTE & VEHÍCULO) -->
       <div>
         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: var(--shadow-card);">
-          <h3 style="font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.8rem; color: var(--color-primary);">
-            <i class="fas fa-user"></i> Cliente
+          <h3 style="font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.8rem; color: var(--color-primary); display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="fas fa-user"></i> Propietario</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">Cliente ID: ${ord.clienteId}</span>
           </h3>
-          <p><strong>${cli.nombre}</strong></p>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.3rem;"><i class="fas fa-phone"></i> ${cli.telefono}</p>
-          <a href="https://wa.me/${telClean}" target="_blank" class="btn btn-success btn-sm" style="margin-top: 0.8rem; width: 100%;">
-            <i class="fab fa-whatsapp"></i> Contactar WhatsApp
-          </a>
+          <p style="font-size: 1.1rem; font-weight: 700; color: var(--text-main);">${cli.nombre}</p>
+          <p style="font-size: 0.88rem; color: var(--text-muted); margin-top: 0.3rem;"><i class="fas fa-phone"></i> Tel: ${cli.telefono}</p>
+          ${telClean ? `<a href="https://wa.me/${telClean}" target="_blank" class="btn btn-success btn-sm" style="margin-top: 0.8rem; width: 100%; display: flex; align-items: center; justify-content: center;"><i class="fab fa-whatsapp"></i> Contactar por WhatsApp</a>` : ''}
         </div>
 
         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; box-shadow: var(--shadow-card);">
-          <h3 style="font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.8rem; color: var(--color-primary);">
-            <i class="fas fa-car"></i> Vehículo
+          <h3 style="font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.8rem; color: var(--color-primary); display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="fas fa-car"></i> Vehículo</span>
+            <span class="license-plate-tag">${veh.placa || 'SIN PLACA'}</span>
           </h3>
-          <p><strong>${veh.marca} ${veh.modelo}</strong> (${veh.año || 'Año N/D'})</p>
-          <p style="margin-top: 0.5rem;"><span class="license-plate-tag">${veh.placa || 'SIN PLACA'}</span></p>
-          <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">Color: ${veh.color || 'N/D'}</p>
-          <p style="font-size: 0.85rem; color: var(--text-muted);">Km Entrada: ${ord.kilometrajeEntrada ? Number(ord.kilometrajeEntrada).toLocaleString() + ' km' : 'N/D'}</p>
+          <p style="font-size: 1.1rem; font-weight: 700; color: var(--color-primary);">${veh.marca} ${veh.modelo}</p>
+          <p style="font-size: 0.88rem; color: var(--text-muted); margin-top: 0.3rem;"><strong>Año:</strong> ${veh.año || 'N/D'} | <strong>Color:</strong> ${veh.color || 'N/D'}</p>
+          <p style="font-size: 0.88rem; color: var(--text-muted); margin-top: 0.3rem;"><strong>Km Entrada:</strong> <span class="tabular-nums" style="font-weight: 600;">${kmText}</span></p>
         </div>
       </div>
 
     </div>
   `;
 
-  document.getElementById("btn-subir-foto-orden").onclick = () => abrirModalSubirFoto(ord.id);
-  document.getElementById("btn-imprimir-constancia").onclick = () => PRINT_MODULE.printOrder(ord, cli, veh, detalles, fotos);
+  const btnFoto = document.getElementById("btn-subir-foto-orden");
+  if (btnFoto) btnFoto.onclick = () => abrirModalSubirFoto(ord.id);
+
+  const btnPrint = document.getElementById("btn-imprimir-constancia");
+  if (btnPrint) btnPrint.onclick = () => PRINT_MODULE.printOrder(ord, cli, veh, detalles, fotos);
 }
 
 async function cambiarEstadoOrden(ordenId, nuevoEstado) {
