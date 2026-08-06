@@ -1,0 +1,12 @@
+# Archivos multimedia temporales de audio/video
+*.mp4
+*.m4a
+*.wav
+*.mp3
+
+# Carpetas de configuración de agentes e IDEs
+.agents/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
