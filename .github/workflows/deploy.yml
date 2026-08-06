@@ -1,4 +1,5 @@
 name: Despliegue Ultrarrápido a GitHub Pages
+# Configurado para ejecución directa de 15 segundos mediante GitHub Actions (Settings -> Pages -> Source = GitHub Actions)
 
 on:
   push:
