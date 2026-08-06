@@ -444,23 +444,72 @@
           </div>
 
           <div class="form-group">
-            <label for="veh-marca">Marca *</label>
-            <input type="text" id="veh-marca" class="form-control" placeholder="Ej: Honda, Toyota, Hyundai, Ford" required>
+            <label for="veh-marca">Marca * (Selecciona de la lista o escribe la tuya)</label>
+            <input type="text" id="veh-marca" class="form-control" placeholder="Ej: Honda, Toyota, Hyundai, Ford..." list="list-marcas" required autocomplete="off">
+            <datalist id="list-marcas">
+              <option value="Honda">
+              <option value="Toyota">
+              <option value="Hyundai">
+              <option value="Ford">
+              <option value="Kia">
+              <option value="Nissan">
+              <option value="Chevrolet">
+              <option value="Jeep">
+              <option value="Mitsubishi">
+              <option value="Mazda">
+              <option value="Mercedes-Benz">
+              <option value="BMW">
+              <option value="Lexus">
+              <option value="Suzuki">
+              <option value="Subaru">
+              <option value="Audi">
+              <option value="Volkswagen">
+              <option value="Dodge">
+              <option value="RAM">
+              <option value="Peugeot">
+            </datalist>
           </div>
 
           <div class="form-group">
-            <label for="veh-modelo">Modelo *</label>
-            <input type="text" id="veh-modelo" class="form-control" placeholder="Ej: Civic, Corolla, Tucson, Focus" required>
+            <label for="veh-modelo">Modelo * (Selecciona de la lista o escribe el tuyo)</label>
+            <input type="text" id="veh-modelo" class="form-control" placeholder="Ej: Civic, Corolla, Tucson, Focus..." list="list-modelos" required autocomplete="off">
+            <datalist id="list-modelos">
+              <!-- Se puebla dinámicamente según la marca elegida -->
+            </datalist>
           </div>
 
           <div class="form-group">
             <label for="veh-ano">Año *</label>
-            <input type="number" id="veh-ano" class="form-control" placeholder="Ej: 2017" required min="1950" max="2030">
+            <input type="text" id="veh-ano" class="form-control" placeholder="Ej: 2017" list="list-anos" required autocomplete="off">
+            <datalist id="list-anos">
+              <option value="2026"><option value="2025"><option value="2024"><option value="2023">
+              <option value="2022"><option value="2021"><option value="2020"><option value="2019">
+              <option value="2018"><option value="2017"><option value="2016"><option value="2015">
+              <option value="2014"><option value="2013"><option value="2012"><option value="2011">
+              <option value="2010"><option value="2009"><option value="2008"><option value="2007">
+              <option value="2006"><option value="2005"><option value="2004"><option value="2003">
+              <option value="2002"><option value="2001"><option value="2000"><option value="1998">
+            </datalist>
           </div>
 
           <div class="form-group">
             <label for="veh-color">Color *</label>
-            <input type="text" id="veh-color" class="form-control" placeholder="Ej: Gris, Azul, Negro" required>
+            <input type="text" id="veh-color" class="form-control" placeholder="Ej: Gris Platino, Blanco, Negro..." list="list-colores" required autocomplete="off">
+            <datalist id="list-colores">
+              <option value="Blanco">
+              <option value="Negro">
+              <option value="Gris">
+              <option value="Gris Platino">
+              <option value="Plata">
+              <option value="Azul">
+              <option value="Azul Marino">
+              <option value="Rojo">
+              <option value="Vino / Guinda">
+              <option value="Verde">
+              <option value="Beige">
+              <option value="Marrón">
+              <option value="Dorado">
+            </datalist>
           </div>
 
           <div class="form-group">

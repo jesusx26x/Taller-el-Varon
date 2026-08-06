@@ -135,7 +135,14 @@ const API = {
           })
         });
         const json = await resp.json();
-        if (json.status === "success") return json.data;
+        if (json.status === "success") {
+          const db = getLocalStore();
+          if (!db.clientes.find(c => c.id === json.data.id)) {
+            db.clientes.push(json.data);
+            saveLocalStore(db);
+          }
+          return json.data;
+        }
       } catch (e) {
         console.error("Error al guardar cliente en la nube:", e);
       }
@@ -167,7 +174,14 @@ const API = {
           })
         });
         const json = await resp.json();
-        if (json.status === "success") return json.data;
+        if (json.status === "success") {
+          const db = getLocalStore();
+          if (!db.vehiculos.find(v => v.id === json.data.id)) {
+            db.vehiculos.push(json.data);
+            saveLocalStore(db);
+          }
+          return json.data;
+        }
       } catch (e) {
         console.error("Error al guardar vehículo en la nube:", e);
       }
@@ -198,7 +212,14 @@ const API = {
           })
         });
         const json = await resp.json();
-        if (json.status === "success") return json.data;
+        if (json.status === "success") {
+          const db = getLocalStore();
+          if (!db.ordenes.find(o => o.id === json.data.id)) {
+            db.ordenes.push(json.data);
+            saveLocalStore(db);
+          }
+          return json.data;
+        }
       } catch (e) {
         console.error("Error al crear orden en la nube:", e);
       }

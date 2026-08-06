@@ -8,6 +8,30 @@ let STATE = {
   selectedOrdenId: null
 };
 
+// Catálogo de Marcas y Modelos del mercado dominicano (sugiere opciones manteniendo libertad de escritura manual)
+const CAR_CATALOG = {
+  "Honda": ["Civic", "Accord", "CR-V", "HR-V", "Pilot", "Fit", "Odyssey", "Ridgeline", "City", "WR-V"],
+  "Toyota": ["Corolla", "Camry", "RAV4", "Hilux", "Yaris", "Highlander", "Fortuner", "Tacoma", "Land Cruiser", "Runner", "Rush", "Sienna", "Prado", "Corolla Cross"],
+  "Hyundai": ["Elantra", "Sonata", "Tucson", "Santa Fe", "Accent", "Grand i10", "H-1", "Kona", "Venue", "Palisade", "Creta"],
+  "Ford": ["Explorer", "Escape", "Focus", "F-150", "Ranger", "Edge", "Mustang", "EcoSport", "Expedition", "Bronco", "Maverick"],
+  "Kia": ["Picanto", "Rio", "Forte", "Optima", "K5", "Sportage", "Sorento", "Telluride", "Soul", "Seltos", "Carnival"],
+  "Nissan": ["Sentra", "Altima", "Frontier", "X-Trail", "Qashqai", "Kicks", "Versa", "Pathfinder", "Patrol", "March", "Murano"],
+  "Chevrolet": ["Spark", "Aveo", "Cruze", "Tracker", "Captiva", "Tahoe", "Silverado", "Equinox", "Suburban", "Colorado"],
+  "Jeep": ["Grand Cherokee", "Wrangler", "Cherokee", "Compass", "Renegade", "Gladiator"],
+  "Mitsubishi": ["Lancer", "Outlander", "Montero", "ASX", "L200", "Mirage", "Eclipse Cross"],
+  "Mazda": ["Mazda 2", "Mazda 3", "Mazda 6", "CX-3", "CX-30", "CX-5", "CX-9", "BT-50"],
+  "Mercedes-Benz": ["C200", "E300", "GLA", "GLC", "GLE", "GLS", "ML350", "Sprinter"],
+  "BMW": ["320i", "528i", "740i", "X1", "X3", "X5", "X6", "X7"],
+  "Lexus": ["IS250", "ES350", "RX350", "GX460", "LX570", "NX300"],
+  "Suzuki": ["Vitara", "Grand Vitara", "Jimny", "Swift", "Baleno", "Ertiga"],
+  "Subaru": ["Impreza", "XV", "Forester", "Outback", "WRX"]
+};
+
+function normalizeOrderId(id) {
+  if (!id) return "";
+  return decodeURIComponent(String(id)).trim().replace(/[\s_]+/g, "-").toUpperCase();
+}
+
 // INICIALIZACIÓN
 document.addEventListener("DOMContentLoaded", async () => {
   initEventListeners();
@@ -43,14 +67,15 @@ async function cargarDatosYRenderizar() {
 window.addEventListener("hashchange", handleHashNavigation);
 
 function handleHashNavigation() {
-  const hash = window.location.hash.replace("#", "") || "dashboard";
+  const rawHash = window.location.hash.replace("#", "") || "dashboard";
   let targetView = "dashboard";
 
-  if (hash.startsWith("orden-detalle/")) {
+  if (rawHash.startsWith("orden-detalle/") || rawHash.startsWith("orden_detalle/")) {
     targetView = "orden-detalle";
-    STATE.selectedOrdenId = hash.split("/")[1];
-  } else if (["dashboard", "ordenes", "clientes", "vehiculos"].includes(hash)) {
-    targetView = hash;
+    const parts = rawHash.split("/");
+    STATE.selectedOrdenId = parts.slice(1).join("/");
+  } else if (["dashboard", "ordenes", "clientes", "vehiculos"].includes(rawHash)) {
+    targetView = rawHash;
   }
 
   STATE.currentView = targetView;
@@ -322,7 +347,8 @@ function renderListaClientes() {
 
   const clientes = STATE.db.clientes || [];
   const vehiculos = STATE.db.vehiculos || [];
-  const query = (document.getElementById("search-clientes").value || "").toLowerCase();
+  const queryInput = document.getElementById("search-clientes");
+  const query = (queryInput ? queryInput.value || "" : "").toLowerCase();
 
   const filtrados = clientes.filter(c => {
     return !query ||
@@ -441,9 +467,23 @@ function renderOrdenDetalle(ordenId) {
   const backBtn = document.getElementById("btn-back-ordenes");
   if (backBtn) backBtn.onclick = () => { window.location.hash = "ordenes"; };
 
-  const ord = (STATE.db.ordenes || []).find(o => o.id === ordenId);
+  const targetClean = normalizeOrderId(ordenId);
+  const ordenes = STATE.db ? (STATE.db.ordenes || []) : [];
+
+  const ord = ordenes.find(o => {
+    const norm = normalizeOrderId(o.id);
+    return norm === targetClean || norm.endsWith(targetClean) || targetClean.endsWith(norm);
+  });
+
   if (!ord) {
-    container.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--color-accent-red);">Órden no encontrada (ID: ${ordenId})</div>`;
+    container.innerHTML = `
+      <div style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 3rem 1.5rem; text-align: center; margin-top: 1rem; box-shadow: var(--shadow-card);">
+        <i class="fas fa-triangle-exclamation" style="font-size: 2.5rem; color: var(--color-accent-red); margin-bottom: 1rem;"></i>
+        <h3 style="color: var(--color-primary); margin-bottom: 0.5rem;">Órden no encontrada (ID: ${ordenId || 'N/D'})</h3>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">La orden requerida no existe o fue eliminada.</p>
+        <a href="#ordenes" class="btn btn-primary btn-sm"><i class="fas fa-arrow-left"></i> Ir a Lista de Órdenes</a>
+      </div>
+    `;
     return;
   }
 
@@ -455,7 +495,9 @@ function renderOrdenDetalle(ordenId) {
   const fotosHtml = fotos.length > 0
     ? fotos.map(f => `
         <div style="position: relative; display: inline-block; margin: 0.4rem;">
-          <img src="${f.url}" style="width: 140px; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);" title="${f.descripcion}">
+          <a href="${f.url}" target="_blank">
+            <img src="${f.url}" style="width: 140px; height: 100px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);" title="${f.descripcion}">
+          </a>
           <p style="font-size: 0.7rem; color: var(--text-muted); width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${f.descripcion || 'Sin nota'}</p>
         </div>
       `).join("")
@@ -473,7 +515,7 @@ function renderOrdenDetalle(ordenId) {
   `).join("");
 
   container.innerHTML = `
-    <div style="display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; margin-top: 1rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 1rem;">
 
       <!-- COLUMNA PRINCIPAL -->
       <div>
@@ -564,7 +606,7 @@ function renderOrdenDetalle(ordenId) {
           <h3 style="font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.8rem; color: var(--color-primary);">
             <i class="fas fa-car"></i> Vehículo
           </h3>
-          <p><strong>${veh.marca} ${veh.modelo}</strong> (${veh.año})</p>
+          <p><strong>${veh.marca} ${veh.modelo}</strong> (${veh.año || 'Año N/D'})</p>
           <p style="margin-top: 0.5rem;"><span class="license-plate-tag">${veh.placa || 'SIN PLACA'}</span></p>
           <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">Color: ${veh.color || 'N/D'}</p>
           <p style="font-size: 0.85rem; color: var(--text-muted);">Km Entrada: ${ord.kilometrajeEntrada ? ord.kilometrajeEntrada.toLocaleString() + ' km' : 'N/D'}</p>
@@ -628,6 +670,14 @@ function initEventListeners() {
     globalSearchInput.oninput = ejecutarBusquedaGlobal;
   }
 
+  // Autocompletar modelos al cambiar marca en modal vehículo
+  const vehMarcaInput = document.getElementById("veh-marca");
+  if (vehMarcaInput) {
+    vehMarcaInput.addEventListener("input", (e) => {
+      actualizarModelosSegunMarca(e.target.value);
+    });
+  }
+
   // Abrir Modal Nueva Orden
   document.querySelectorAll(".btn-open-nueva-orden").forEach(btn => {
     btn.onclick = () => {
@@ -643,7 +693,7 @@ function initEventListeners() {
     };
   });
 
-  // Cambio en select cliente dentro de Nueva Orden
+  // Cambio en select cliente dentro de Nueva Orden -> Carga vehículos asignados a ese cliente
   document.getElementById("select-orden-cliente").onchange = (e) => {
     poblarSelectVehiculosParaCliente(e.target.value);
   };
@@ -665,18 +715,39 @@ function initEventListeners() {
   // Formulario Nueva Orden Submit
   document.getElementById("form-nueva-orden").addEventListener("submit", async (e) => {
     e.preventDefault();
+    const submitBtn = e.target.querySelector("button[type='submit']");
+    const originalText = submitBtn ? submitBtn.innerHTML : "";
+
+    const clienteId = document.getElementById("select-orden-cliente").value;
+    const vehiculoId = document.getElementById("select-orden-vehiculo").value;
+
+    if (!clienteId) {
+      UTILS.showToast("Debes seleccionar un cliente", "warning");
+      return;
+    }
+    if (!vehiculoId) {
+      UTILS.showToast("Debes seleccionar o agregar un vehículo para este cliente", "warning");
+      return;
+    }
 
     const nuevaOrden = {
-      clienteId: document.getElementById("select-orden-cliente").value,
-      vehiculoId: document.getElementById("select-orden-vehiculo").value,
+      clienteId: clienteId,
+      vehiculoId: vehiculoId,
       motivoVisita: document.getElementById("input-orden-motivo").value,
-      kilometrajeEntrada: document.getElementById("input-orden-km").value,
+      kilometrajeEntrada: Math.max(0, Number(document.getElementById("input-orden-km").value) || 0),
       diagnostico: document.getElementById("input-orden-diagnostico").value,
       estado: "Pendiente"
     };
 
     try {
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Guardando...`; }
       const creada = await API.crearOrden(nuevaOrden);
+      
+      // Actualizar estado local inmediatamente
+      if (STATE.db && STATE.db.ordenes) {
+        STATE.db.ordenes.push(creada);
+      }
+
       UTILS.showToast("¡Órden de ingreso creada con éxito!");
       document.getElementById("modal-nueva-orden").classList.add("hidden");
       document.getElementById("form-nueva-orden").reset();
@@ -684,6 +755,8 @@ function initEventListeners() {
       window.location.hash = `#orden-detalle/${creada.id}`;
     } catch (err) {
       UTILS.showToast("Error al crear la orden", "error");
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalText; }
     }
   });
 
@@ -694,6 +767,8 @@ function initEventListeners() {
 
   document.getElementById("form-nuevo-cliente").addEventListener("submit", async (e) => {
     e.preventDefault();
+    const submitBtn = e.target.querySelector("button[type='submit']");
+    const originalText = submitBtn ? submitBtn.innerHTML : "";
 
     const cli = {
       nombre: document.getElementById("cli-nombre").value,
@@ -704,16 +779,38 @@ function initEventListeners() {
     };
 
     try {
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Guardando...`; }
       const nuevo = await API.crearCliente(cli);
+      
+      // Actualización inmediata en memoria local
+      if (STATE.db) {
+        if (!STATE.db.clientes) STATE.db.clientes = [];
+        if (!STATE.db.clientes.find(c => c.id === nuevo.id)) {
+          STATE.db.clientes.push(nuevo);
+        }
+      }
+
       UTILS.showToast("Cliente registrado correctamente");
       document.getElementById("modal-nuevo-cliente").classList.add("hidden");
       document.getElementById("form-nuevo-cliente").reset();
-      await cargarDatosYRenderizar();
+
+      // Limpiar filtro de búsqueda si existía
+      const searchCliInput = document.getElementById("search-clientes");
+      if (searchCliInput) searchCliInput.value = "";
+
+      renderListaClientes(); // Render inmediato
       poblarSelectClientes();
-      document.getElementById("select-orden-cliente").value = nuevo.id;
+      
+      const selectOrdenCli = document.getElementById("select-orden-cliente");
+      if (selectOrdenCli) selectOrdenCli.value = nuevo.id;
       poblarSelectVehiculosParaCliente(nuevo.id);
+
+      // Sincronización completa en background
+      cargarDatosYRenderizar();
     } catch (err) {
       UTILS.showToast("Error al guardar cliente", "error");
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalText; }
     }
   });
 
@@ -731,6 +828,8 @@ function initEventListeners() {
 
   document.getElementById("form-nuevo-vehiculo").addEventListener("submit", async (e) => {
     e.preventDefault();
+    const submitBtn = e.target.querySelector("button[type='submit']");
+    const originalText = submitBtn ? submitBtn.innerHTML : "";
 
     const veh = {
       clienteId: document.getElementById("veh-cliente").value,
@@ -743,28 +842,49 @@ function initEventListeners() {
     };
 
     try {
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Guardando...`; }
       const nuevoVeh = await API.crearVehiculo(veh);
+      
+      // Actualización inmediata local
+      if (STATE.db) {
+        if (!STATE.db.vehiculos) STATE.db.vehiculos = [];
+        if (!STATE.db.vehiculos.find(v => v.id === nuevoVeh.id)) {
+          STATE.db.vehiculos.push(nuevoVeh);
+        }
+      }
+
       UTILS.showToast("Vehículo guardado en el sistema");
       document.getElementById("modal-nuevo-vehiculo").classList.add("hidden");
       document.getElementById("form-nuevo-vehiculo").reset();
-      await cargarDatosYRenderizar();
+
+      renderListaVehiculos(); // Render inmediato
       poblarSelectVehiculosParaCliente(veh.clienteId);
-      document.getElementById("select-orden-vehiculo").value = nuevoVeh.id;
+      
+      const selectVehOrden = document.getElementById("select-orden-vehiculo");
+      if (selectVehOrden) selectVehOrden.value = nuevoVeh.id;
+
+      cargarDatosYRenderizar();
     } catch (err) {
       UTILS.showToast("Error al guardar vehículo", "error");
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalText; }
     }
   });
 
   // Formulario Agregar Ítem a Orden
   document.getElementById("form-agregar-item").addEventListener("submit", async (e) => {
     e.preventDefault();
+    const submitBtn = e.target.querySelector("button[type='submit']");
+    const originalText = submitBtn ? submitBtn.innerHTML : "";
+
     const ordenId = document.getElementById("item-orden-id").value;
     const tipo = document.getElementById("item-tipo").value;
     const desc = document.getElementById("item-descripcion").value;
-    const cant = document.getElementById("item-cantidad").value;
-    const precio = document.getElementById("item-precio").value;
+    const cant = Math.max(1, Number(document.getElementById("item-cantidad").value) || 1);
+    const precio = Math.max(0, Number(document.getElementById("item-precio").value) || 0);
 
     try {
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Añadiendo...`; }
       await API.agregarServicioAOrden(ordenId, tipo, desc, cant, precio);
       UTILS.showToast("Ítem agregado a la orden");
       document.getElementById("modal-agregar-item").classList.add("hidden");
@@ -772,6 +892,8 @@ function initEventListeners() {
       await cargarDatosYRenderizar();
     } catch (err) {
       UTILS.showToast("Error al agregar ítem", "error");
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalText; }
     }
   });
 
@@ -788,6 +910,9 @@ function initEventListeners() {
   // Formulario Subir Foto
   document.getElementById("form-subir-foto").addEventListener("submit", async (e) => {
     e.preventDefault();
+    const submitBtn = e.target.querySelector("button[type='submit']");
+    const originalText = submitBtn ? submitBtn.innerHTML : "";
+
     const ordenId = document.getElementById("foto-orden-id").value;
     const file = document.getElementById("foto-input").files[0];
     const desc = document.getElementById("foto-descripcion").value;
@@ -795,6 +920,7 @@ function initEventListeners() {
     if (!file) return;
 
     try {
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Subiendo...`; }
       const base64 = await UTILS.compressAndConvertImage(file);
       await API.subirFoto(ordenId, base64, file.name, desc);
       UTILS.showToast("Foto de evidencia guardada");
@@ -804,6 +930,8 @@ function initEventListeners() {
       await cargarDatosYRenderizar();
     } catch (err) {
       UTILS.showToast("Error al subir foto", "error");
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = originalText; }
     }
   });
 
@@ -843,11 +971,29 @@ function initEventListeners() {
 }
 
 // AYUDANTES DE MODALES Y SELECTS
+function actualizarModelosSegunMarca(marcaNombre) {
+  const datalistModelos = document.getElementById("list-modelos");
+  if (!datalistModelos) return;
+
+  const marcaL = (marcaNombre || '').trim().toLowerCase();
+  let matchedBrandKey = Object.keys(CAR_CATALOG).find(k => k.toLowerCase() === marcaL || k.toLowerCase().startsWith(marcaL));
+  
+  let modelos = [];
+  if (matchedBrandKey) {
+    modelos = CAR_CATALOG[matchedBrandKey];
+  } else {
+    // Si la marca es personalizada, ofrecer modelos generales
+    Object.values(CAR_CATALOG).forEach(arr => modelos.push(...arr));
+  }
+
+  datalistModelos.innerHTML = [...new Set(modelos)].map(m => `<option value="${m}">`).join("");
+}
+
 function poblarSelectClientes() {
   const select = document.getElementById("select-orden-cliente");
   if (!select) return;
 
-  const clientes = STATE.db.clientes || [];
+  const clientes = STATE.db ? (STATE.db.clientes || []) : [];
   select.innerHTML = `<option value="">-- Selecciona el cliente --</option>` +
     clientes.map(c => `<option value="${c.id}">${c.nombre} (${c.telefono || 'Sin tel'})</option>`).join("");
 }
@@ -862,7 +1008,7 @@ function poblarSelectVehiculosParaCliente(clienteId) {
     return;
   }
 
-  const vehiculos = (STATE.db.vehiculos || []).filter(v => v.clienteId === clienteId);
+  const vehiculos = STATE.db ? (STATE.db.vehiculos || []).filter(v => v.clienteId === clienteId) : [];
   if (vehiculos.length === 0) {
     select.innerHTML = `<option value="">-- Este cliente no tiene vehículos registrados --</option>`;
     select.disabled = true;
@@ -870,14 +1016,19 @@ function poblarSelectVehiculosParaCliente(clienteId) {
   }
 
   select.innerHTML = `<option value="">-- Selecciona el vehículo --</option>` +
-    vehiculos.map(v => `<option value="${v.id}">${v.marca} ${v.modelo} ${v.año} (Placa: ${v.placa || 'S/P'})</option>`).join("");
+    vehiculos.map(v => `<option value="${v.id}">${v.marca} ${v.modelo} ${v.año || ''} (Placa: ${v.placa || 'S/P'})</option>`).join("");
   select.disabled = false;
+
+  // Auto-seleccionar si solo hay 1 vehículo
+  if (vehiculos.length === 1) {
+    select.value = vehiculos[0].id;
+  }
 }
 
 function poblarSelectClientesModalVehiculo() {
   const select = document.getElementById("veh-cliente");
   if (!select) return;
-  const clientes = STATE.db.clientes || [];
+  const clientes = STATE.db ? (STATE.db.clientes || []) : [];
   select.innerHTML = `<option value="">-- Selecciona el cliente --</option>` +
     clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join("");
 }
