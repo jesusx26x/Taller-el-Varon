@@ -155,6 +155,14 @@ function sheetToObjects(sheet) {
   return objects;
 }
 
+function getDominicanDateISO() {
+  try {
+    return Utilities.formatDate(new Date(), "America/Santo_Domingo", "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+  } catch (e) {
+    return new Date().toISOString();
+  }
+}
+
 function crearRegistro(nombreHoja, data, prefijo) {
   const lock = LockService.getScriptLock();
   lock.tryLock(10000);
@@ -162,14 +170,19 @@ function crearRegistro(nombreHoja, data, prefijo) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(nombreHoja);
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const lastCol = sheet.getLastColumn();
+    
+    if (lastCol === 0) {
+      throw new Error("La pestaña " + nombreHoja + " debe contener los encabezados en la Fila 1");
+    }
 
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
     const lastRow = sheet.getLastRow();
     const newId = prefijo + "-" + String(lastRow).padStart(4, "0");
     data.id = newId;
 
     if (nombreHoja === "Clientes" && !data.fechaRegistro) {
-      data.fechaRegistro = new Date().toISOString().split("T")[0];
+      data.fechaRegistro = getDominicanDateISO().split("T")[0];
     }
 
     const rowToInsert = headers.map(header => data[header] !== undefined ? data[header] : "");
