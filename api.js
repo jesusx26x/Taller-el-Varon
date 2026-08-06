@@ -3,8 +3,6 @@
  * Interfaz de comunicación con Google Apps Script + Modo Local/Demo
  */
 
-// Si colocas la URL del despliegue de Apps Script aquí, se conectará a Google Sheets.
-// Si se deja vacío, utilizará el almacenamiento local (localStorage) con datos demo iniciales.
 const CONFIG = {
   API_URL: localStorage.getItem("taller_api_url") || "https://script.google.com/macros/s/AKfycbzxuBcAfHGUDdtSoou9I9i_ZT-kl58YCFb2F-Sxm1iPi2BeHpb3Z_ijIUbdMRaBZazj/exec",
   TOKEN_KEY: "taller_session_token",
@@ -21,6 +19,18 @@ const DEMO_DATABASE = {
   fotos: []
 };
 
+// Saneador universal para garantizar que todas las llaves existan como arreglos
+function sanitizeDb(data) {
+  if (!data || typeof data !== "object") data = {};
+  return {
+    clientes: Array.isArray(data.clientes) ? data.clientes : [],
+    vehiculos: Array.isArray(data.vehiculos) ? data.vehiculos : [],
+    ordenes: Array.isArray(data.ordenes) ? data.ordenes : [],
+    detalleServicios: Array.isArray(data.detalleServicios) ? data.detalleServicios : [],
+    fotos: Array.isArray(data.fotos) ? data.fotos : []
+  };
+}
+
 // Inicializar Base de Datos en localStorage si no existe
 function initLocalStore() {
   const current = localStorage.getItem(CONFIG.LOCAL_DB_KEY);
@@ -31,11 +41,18 @@ function initLocalStore() {
 
 function getLocalStore() {
   initLocalStore();
-  return JSON.parse(localStorage.getItem(CONFIG.LOCAL_DB_KEY));
+  try {
+    const raw = localStorage.getItem(CONFIG.LOCAL_DB_KEY);
+    return sanitizeDb(JSON.parse(raw));
+  } catch (e) {
+    console.error("Error leyendo localStorage:", e);
+    return sanitizeDb(DEMO_DATABASE);
+  }
 }
 
 function saveLocalStore(db) {
-  localStorage.setItem(CONFIG.LOCAL_DB_KEY, JSON.stringify(db));
+  const sanitized = sanitizeDb(db);
+  localStorage.setItem(CONFIG.LOCAL_DB_KEY, JSON.stringify(sanitized));
 }
 
 /**
@@ -53,28 +70,33 @@ const API = {
 
   getApiUrl: () => CONFIG.API_URL,
 
+  getLocalStore: getLocalStore,
+
   login: async (usuario, clave) => {
     if (API.isCloudMode()) {
       try {
         const resp = await fetch(CONFIG.API_URL, {
           method: "POST",
+          redirect: "follow",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action: "login", data: { usuario, clave } })
+          body: JSON.stringify({
+            action: "login",
+            data: { usuario, clave }
+          })
         });
         const json = await resp.json();
-        if (json.status === "success") {
-          localStorage.setItem(CONFIG.TOKEN_KEY, json.data.token);
+        if (json.status === "success" && json.data) {
+          localStorage.setItem(CONFIG.TOKEN_KEY, json.data.token || "TOKEN_PABLO_ROSARIO");
           localStorage.setItem(CONFIG.USER_KEY, JSON.stringify(json.data));
           return json.data;
         } else {
-          throw new Error(json.message || "Credenciales incorrectas");
+          throw new Error(json.message || "Usuario o contraseña incorrectos");
         }
       } catch (err) {
-        console.warn("Fallo al conectar con Apps Script. Intentando credenciales en modo local:", err);
+        console.warn("Fallo en login de nube. Intentando validación local:", err);
       }
     }
 
-    // Validación Local (Offline / Demo)
     if (usuario === "prosario" && clave === "tallerelvaron") {
       const data = {
         token: "TOKEN_LOCAL_PABLO_ROSARIO",
@@ -85,7 +107,7 @@ const API = {
       localStorage.setItem(CONFIG.USER_KEY, JSON.stringify(data));
       return data;
     } else {
-      throw new Error("Usuario o contraseña incorrectos. (Prueba con prosario / tallerelvaron)");
+      throw new Error("Usuario o contraseña incorrectos.");
     }
   },
 
@@ -103,6 +125,7 @@ const API = {
       try {
         const resp = await fetch(CONFIG.API_URL, {
           method: "POST",
+          redirect: "follow",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "obtenerTodo",
@@ -110,10 +133,10 @@ const API = {
           })
         });
         const json = await resp.json();
-        if (json.status === "success") {
-          // Actualizamos la copia local para cache
-          saveLocalStore(json.data);
-          return json.data;
+        if (json.status === "success" && json.data) {
+          const sanitized = sanitizeDb(json.data);
+          saveLocalStore(sanitized);
+          return sanitized;
         }
       } catch (err) {
         console.warn("No se pudo sincronizar con la nube. Cargando datos locales:", err);
@@ -127,6 +150,7 @@ const API = {
       try {
         const resp = await fetch(CONFIG.API_URL, {
           method: "POST",
+          redirect: "follow",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "crearCliente",
@@ -135,7 +159,7 @@ const API = {
           })
         });
         const json = await resp.json();
-        if (json.status === "success") {
+        if (json.status === "success" && json.data) {
           const db = getLocalStore();
           if (!db.clientes.find(c => c.id === json.data.id)) {
             db.clientes.push(json.data);
@@ -166,6 +190,7 @@ const API = {
       try {
         const resp = await fetch(CONFIG.API_URL, {
           method: "POST",
+          redirect: "follow",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "crearVehiculo",
@@ -174,7 +199,7 @@ const API = {
           })
         });
         const json = await resp.json();
-        if (json.status === "success") {
+        if (json.status === "success" && json.data) {
           const db = getLocalStore();
           if (!db.vehiculos.find(v => v.id === json.data.id)) {
             db.vehiculos.push(json.data);
@@ -204,6 +229,7 @@ const API = {
       try {
         const resp = await fetch(CONFIG.API_URL, {
           method: "POST",
+          redirect: "follow",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "crearOrden",
@@ -212,7 +238,7 @@ const API = {
           })
         });
         const json = await resp.json();
-        if (json.status === "success") {
+        if (json.status === "success" && json.data) {
           const db = getLocalStore();
           if (!db.ordenes.find(o => o.id === json.data.id)) {
             db.ordenes.push(json.data);
@@ -275,6 +301,7 @@ const API = {
       try {
         const resp = await fetch(CONFIG.API_URL, {
           method: "POST",
+          redirect: "follow",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "actualizarEstadoOrden",
@@ -283,7 +310,7 @@ const API = {
           })
         });
         const json = await resp.json();
-        if (json.status === "success") return json.data;
+        if (json.status === "success" && json.data) return json.data;
       } catch (e) {
         console.error("Error al actualizar estado en la nube:", e);
       }
@@ -297,7 +324,7 @@ const API = {
       if (nuevoEstado === "Entregado") {
         ord.fechaEntrega = fechaEntrega || new Date().toISOString();
       } else {
-        ord.fechaEntrega = ""; // Limpiar si se revierte estado
+        ord.fechaEntrega = "";
       }
       saveLocalStore(db);
     }
@@ -313,6 +340,7 @@ const API = {
       try {
         const resp = await fetch(CONFIG.API_URL, {
           method: "POST",
+          redirect: "follow",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "agregarServicioAOrden",
@@ -321,7 +349,7 @@ const API = {
           })
         });
         const json = await resp.json();
-        if (json.status === "success") return json.data;
+        if (json.status === "success" && json.data) return json.data;
       } catch (e) {
         console.error("Error al agregar ítem en la nube:", e);
       }
@@ -356,6 +384,7 @@ const API = {
       try {
         const resp = await fetch(CONFIG.API_URL, {
           method: "POST",
+          redirect: "follow",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({
             action: "subirFoto",
@@ -364,7 +393,7 @@ const API = {
           })
         });
         const json = await resp.json();
-        if (json.status === "success") return json.data;
+        if (json.status === "success" && json.data) return json.data;
       } catch (e) {
         console.error("Error al subir foto a Google Drive:", e);
       }

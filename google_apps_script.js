@@ -1,28 +1,5 @@
 /**
- * TALLER EL VARÓN - BACKEND GOOGLE APPS SCRIPT
- * -------------------------------------------------------------
- * Instrucciones de Despliegue:
- * 1. Crea una Hoja de Cálculo en Google Sheets llamada "Taller El Varon - BD"
- * 2. Crea 5 pestañas exactamente con estos nombres:
- *    - Clientes
- *    - Vehiculos
- *    - Ordenes
- *    - DetalleServicios
- *    - Fotos
- * 3. En cada pestaña, coloca los encabezados en la Fila 1:
- *    - Clientes: id | nombre | telefono | cedula | email | notas | fechaRegistro
- *    - Vehiculos: id | clienteId | marca | modelo | año | color | placa | vin | kilometraje
- *    - Ordenes: id | clienteId | vehiculoId | fechaIngreso | fechaEntrega | estado | motivoVisita | diagnostico | kilometrajeEntrada | montoTotal | notas
- *    - DetalleServicios: id | ordenId | tipo | descripcion | cantidad | precioUnitario | subtotal
- *    - Fotos: id | ordenId | driveFileId | url | descripcion | fechaSubida
- * 4. Ve a Extensiones -> Apps Script.
- * 5. Pega todo este código en el editor `Code.gs`.
- * 6. (Opcional) Crea una carpeta en Google Drive para las fotos y copia su ID en DRIVE_FOLDER_ID abajo.
- * 7. Haz clic en "Desplegar" -> "Nuevo despliegue" -> Selecciona tipo "Aplicación web".
- * 8. Configura:
- *    - Ejecutar como: Yo (tu cuenta)
- *    - Quién tiene acceso: Cualquier persona
- * 9. Copia la URL de la Web App generada y colócala en tu archivo `api.js` del frontend.
+ * TALLER EL VARÓN - BACKEND GOOGLE APPS SCRIPT (RESILIENTE)
  */
 
 const CREDENTIALS = {
@@ -38,6 +15,26 @@ function doGet(e) {
 
 function doPost(e) {
   return handleRequest(e, "POST");
+}
+
+function getSheetTolerant(ss, sheetName) {
+  let sheet = ss.getSheetByName(sheetName);
+  if (sheet) return sheet;
+
+  const map = {
+    "Vehiculos": ["Vehículos", "VEHICULOS", "VEHÍCULOS", "vehiculos"],
+    "Ordenes": ["Órdenes", "ORDENES", "ÓRDENES", "ordenes"],
+    "Clientes": ["CLIENTES", "clientes"],
+    "DetalleServicios": ["DetallesServicios", "Detalle Servicios", "DETALLESERVICIOS"],
+    "Fotos": ["FOTOS", "fotos"]
+  };
+
+  const alternatives = map[sheetName] || [];
+  for (let i = 0; i < alternatives.length; i++) {
+    sheet = ss.getSheetByName(alternatives[i]);
+    if (sheet) return sheet;
+  }
+  return null;
 }
 
 function handleRequest(e, method) {
@@ -126,12 +123,23 @@ function jsonResponse(obj) {
 
 function obtenerTodoElSistema() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  const safeRead = function(name) {
+    try {
+      const sheet = getSheetTolerant(ss, name);
+      return sheetToObjects(sheet);
+    } catch (e) {
+      console.error("Error leyendo pestaña " + name + ": " + e.toString());
+      return [];
+    }
+  };
+
   return {
-    clientes: sheetToObjects(ss.getSheetByName("Clientes")),
-    vehiculos: sheetToObjects(ss.getSheetByName("Vehiculos")),
-    ordenes: sheetToObjects(ss.getSheetByName("Ordenes")),
-    detalleServicios: sheetToObjects(ss.getSheetByName("DetalleServicios")),
-    fotos: sheetToObjects(ss.getSheetByName("Fotos"))
+    clientes: safeRead("Clientes"),
+    vehiculos: safeRead("Vehiculos"),
+    ordenes: safeRead("Ordenes"),
+    detalleServicios: safeRead("DetalleServicios"),
+    fotos: safeRead("Fotos")
   };
 }
 
@@ -169,9 +177,12 @@ function crearRegistro(nombreHoja, data, prefijo) {
 
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(nombreHoja);
+    const sheet = getSheetTolerant(ss, nombreHoja);
+    if (!sheet) {
+      throw new Error("Pestaña no encontrada: " + nombreHoja);
+    }
+
     const lastCol = sheet.getLastColumn();
-    
     if (lastCol === 0) {
       throw new Error("La pestaña " + nombreHoja + " debe contener los encabezados en la Fila 1");
     }
@@ -196,7 +207,9 @@ function crearRegistro(nombreHoja, data, prefijo) {
 
 function actualizarRegistro(nombreHoja, data) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(nombreHoja);
+  const sheet = getSheetTolerant(ss, nombreHoja);
+  if (!sheet) throw new Error("Pestaña no encontrada: " + nombreHoja);
+
   const rows = sheet.getDataRange().getValues();
   const headers = rows[0];
 
@@ -216,14 +229,14 @@ function crearOrdenCompleta(data) {
 
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheetOrdenes = ss.getSheetByName("Ordenes");
-    const sheetDetalle = ss.getSheetByName("DetalleServicios");
+    const sheetOrdenes = getSheetTolerant(ss, "Ordenes");
+    const sheetDetalle = getSheetTolerant(ss, "DetalleServicios");
 
     const year = new Date().getFullYear();
     const count = sheetOrdenes.getLastRow();
     const ordenId = "ORD-" + year + "-" + String(count).padStart(4, "0");
 
-    const fechaIngreso = new Date().toISOString();
+    const fechaIngreso = getDominicanDateISO();
     let montoTotal = 0;
 
     if (data.servicios && Array.isArray(data.servicios)) {
@@ -277,14 +290,16 @@ function crearOrdenCompleta(data) {
 
 function actualizarEstadoOrden(ordenId, nuevoEstado, fechaEntrega) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Ordenes");
+  const sheet = getSheetTolerant(ss, "Ordenes");
   const rows = sheet.getDataRange().getValues();
 
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] == ordenId) {
       sheet.getRange(i + 1, 6).setValue(nuevoEstado);
       if (nuevoEstado === "Entregado" || fechaEntrega) {
-        sheet.getRange(i + 1, 5).setValue(fechaEntrega || new Date().toISOString());
+        sheet.getRange(i + 1, 5).setValue(fechaEntrega || getDominicanDateISO());
+      } else {
+        sheet.getRange(i + 1, 5).setValue("");
       }
       return { id: ordenId, estado: nuevoEstado };
     }
@@ -294,8 +309,8 @@ function actualizarEstadoOrden(ordenId, nuevoEstado, fechaEntrega) {
 
 function agregarServicioAOrden(data) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetDetalle = ss.getSheetByName("DetalleServicios");
-  const sheetOrdenes = ss.getSheetByName("Ordenes");
+  const sheetDetalle = getSheetTolerant(ss, "DetalleServicios");
+  const sheetOrdenes = getSheetTolerant(ss, "Ordenes");
 
   const subtotal = (Number(data.cantidad) || 1) * (Number(data.precioUnitario) || 0);
   const itemId = "DET-" + Date.now();
@@ -344,9 +359,9 @@ function subirFotoDrive(data) {
   const fileUrl = "https://drive.google.com/uc?export=view&id=" + fileId;
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetFotos = ss.getSheetByName("Fotos");
+  const sheetFotos = getSheetTolerant(ss, "Fotos");
   const fotoId = "IMG-" + Date.now();
-  const fecha = new Date().toISOString();
+  const fecha = getDominicanDateISO();
 
   sheetFotos.appendRow([
     fotoId,
@@ -368,7 +383,7 @@ function subirFotoDrive(data) {
 
 function eliminarRegistro(nombreHoja, id) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(nombreHoja);
+  const sheet = getSheetTolerant(ss, nombreHoja);
   const rows = sheet.getDataRange().getValues();
 
   for (let i = 1; i < rows.length; i++) {
