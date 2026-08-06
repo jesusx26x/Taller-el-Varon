@@ -21,23 +21,11 @@ function checkAuthStatus() {
   if (API.isAuthenticated()) {
     loginScreen.style.display = "none";
     appContainer.style.display = "flex";
-    updateCloudStatusBadge();
     cargarDatosYRenderizar();
     handleHashNavigation();
   } else {
     loginScreen.style.display = "flex";
     appContainer.style.display = "none";
-  }
-}
-
-function updateCloudStatusBadge() {
-  const badgeText = document.getElementById("cloud-status-text");
-  if (badgeText) {
-    if (API.isCloudMode()) {
-      badgeText.innerHTML = `<span style="color: var(--accent-green);"><i class="fas fa-wifi"></i> Nube (Google)</span>`;
-    } else {
-      badgeText.innerHTML = `<span style="color: var(--accent-gold);"><i class="fas fa-database"></i> Modo Local</span>`;
-    }
   }
 }
 
@@ -110,19 +98,43 @@ function renderCurrentView() {
 }
 
 // -------------------------------------------------------------
-// VISTA: DASHBOARD
+// VISTA: DASHBOARD & REPORTERÍA
 // -------------------------------------------------------------
 function renderDashboard() {
   const ordenes = STATE.db.ordenes || [];
   const clientes = STATE.db.clientes || [];
   const vehiculos = STATE.db.vehiculos || [];
 
-  // Conteo en taller (Pendiente o En Proceso)
+  const todayStr = new Date().toISOString().split("T")[0];
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+
+  // 1. Vehículos en taller hoy (Pendiente o En Proceso)
   const enTaller = ordenes.filter(o => o.estado === "Pendiente" || o.estado === "En Proceso").length;
 
+  // 2. Ingresados Hoy
+  const ingresadosHoy = ordenes.filter(o => {
+    return o.fechaIngreso && o.fechaIngreso.startsWith(todayStr);
+  }).length;
+
+  // 3. Total Cobrado Hoy
+  const cobradoHoy = ordenes
+    .filter(o => o.fechaIngreso && o.fechaIngreso.startsWith(todayStr))
+    .reduce((sum, o) => sum + (Number(o.montoTotal) || 0), 0);
+
+  // 4. Total Cobrado Mes
+  const cobradoMes = ordenes
+    .filter(o => {
+      if (!o.fechaIngreso) return false;
+      const d = new Date(o.fechaIngreso);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    })
+    .reduce((sum, o) => sum + (Number(o.montoTotal) || 0), 0);
+
   document.getElementById("stat-en-taller").textContent = enTaller;
-  document.getElementById("stat-total-vehiculos").textContent = vehiculos.length;
-  document.getElementById("stat-total-clientes").textContent = clientes.length;
+  document.getElementById("stat-vehiculos-hoy").textContent = ingresadosHoy;
+  document.getElementById("stat-cobrado-hoy").textContent = UTILS.formatMoney(cobradoHoy);
+  document.getElementById("stat-cobrado-mes").textContent = UTILS.formatMoney(cobradoMes);
 
   // Tabla últimas órdenes
   const tbody = document.getElementById("tbl-dashboard-ordenes");
@@ -131,7 +143,15 @@ function renderDashboard() {
   const ultimas = [...ordenes].reverse().slice(0, 5);
 
   if (ultimas.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">No hay órdenes registradas aún.</td></tr>`;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2.5rem 1rem;">
+          <i class="fas fa-folder-open" style="font-size: 2rem; color: var(--border-color); margin-bottom: 0.5rem; display: block;"></i>
+          <strong>No hay órdenes de trabajo registradas.</strong><br>
+          <span style="font-size: 0.85rem;">Presiona <strong>"+ NUEVO INGRESO DE VEHÍCULO"</strong> para registrar el primer vehículo en el taller.</span>
+        </td>
+      </tr>
+    `;
     return;
   }
 
@@ -147,13 +167,89 @@ function renderDashboard() {
         <td>${veh.marca} ${veh.modelo}</td>
         <td><span class="license-plate-tag">${veh.placa || 'S/P'}</span></td>
         <td>${UTILS.getStatusBadgeHtml(ord.estado)}</td>
-        <td style="font-weight: 700; color: var(--accent-green);">${UTILS.formatMoney(ord.montoTotal)}</td>
+        <td style="font-weight: 700; color: var(--color-accent-red);">${UTILS.formatMoney(ord.montoTotal)}</td>
         <td>
           <a href="#orden-detalle/${ord.id}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i> Ver</a>
         </td>
       </tr>
     `;
   }).join("");
+}
+
+// BÚSQUEDA GLOBAL UNIFICADA (DASHBOARD)
+function ejecutarBusquedaGlobal() {
+  const input = document.getElementById("global-search-input");
+  const container = document.getElementById("global-search-results");
+  if (!input || !container) return;
+
+  const query = (input.value || "").trim().toLowerCase();
+  if (!query || query.length < 2) {
+    container.style.display = "none";
+    container.innerHTML = "";
+    return;
+  }
+
+  const clientes = STATE.db.clientes || [];
+  const vehiculos = STATE.db.vehiculos || [];
+  const ordenes = STATE.db.ordenes || [];
+
+  const matchClientes = clientes.filter(c =>
+    (c.nombre && c.nombre.toLowerCase().includes(query)) ||
+    (c.telefono && c.telefono.toLowerCase().includes(query)) ||
+    (c.cedula && c.cedula.toLowerCase().includes(query))
+  );
+
+  const matchVehiculos = vehiculos.filter(v =>
+    (v.placa && v.placa.toLowerCase().includes(query)) ||
+    (v.marca && v.marca.toLowerCase().includes(query)) ||
+    (v.modelo && v.modelo.toLowerCase().includes(query)) ||
+    (v.vin && v.vin.toLowerCase().includes(query))
+  );
+
+  const matchOrdenes = ordenes.filter(o =>
+    o.id.toLowerCase().includes(query) ||
+    (o.motivoVisita && o.motivoVisita.toLowerCase().includes(query))
+  );
+
+  let html = `<div style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; box-shadow: var(--shadow-card);">`;
+
+  if (matchClientes.length === 0 && matchVehiculos.length === 0 && matchOrdenes.length === 0) {
+    html += `<p style="color: var(--text-muted); font-size: 0.9rem;">Sin resultados para "${query}".</p>`;
+  } else {
+    if (matchClientes.length > 0) {
+      html += `<h4 style="font-size: 0.85rem; color: var(--color-primary); margin-bottom: 0.5rem;"><i class="fas fa-users"></i> Clientes (${matchClientes.length}):</h4>`;
+      html += matchClientes.map(c => `
+        <div style="padding: 0.4rem 0.6rem; border-bottom: 1px solid #f0f0f0; font-size: 0.88rem; display: flex; justify-content: space-between; align-items: center;">
+          <span><strong>${c.nombre}</strong> (${c.telefono || 'Sin tel'})</span>
+          <a href="#clientes" onclick="document.getElementById('search-clientes').value='${c.nombre}'; renderListaClientes();" class="btn btn-secondary btn-sm">Ver Cliente</a>
+        </div>
+      `).join("");
+    }
+
+    if (matchVehiculos.length > 0) {
+      html += `<h4 style="font-size: 0.85rem; color: var(--color-primary); margin-top: 0.8rem; margin-bottom: 0.5rem;"><i class="fas fa-car"></i> Vehículos (${matchVehiculos.length}):</h4>`;
+      html += matchVehiculos.map(v => `
+        <div style="padding: 0.4rem 0.6rem; border-bottom: 1px solid #f0f0f0; font-size: 0.88rem; display: flex; justify-content: space-between; align-items: center;">
+          <span><strong>${v.marca} ${v.modelo}</strong> (${v.placa || 'S/P'})</span>
+          <button class="btn btn-secondary btn-sm" onclick="verHistorialVehiculo('${v.id}')">Ver Historial</button>
+        </div>
+      `).join("");
+    }
+
+    if (matchOrdenes.length > 0) {
+      html += `<h4 style="font-size: 0.85rem; color: var(--color-primary); margin-top: 0.8rem; margin-bottom: 0.5rem;"><i class="fas fa-file-invoice"></i> Órdenes (${matchOrdenes.length}):</h4>`;
+      html += matchOrdenes.map(o => `
+        <div style="padding: 0.4rem 0.6rem; border-bottom: 1px solid #f0f0f0; font-size: 0.88rem; display: flex; justify-content: space-between; align-items: center;">
+          <span><strong>Órden ${o.id}</strong> [${o.estado}] - ${o.motivoVisita}</span>
+          <a href="#orden-detalle/${o.id}" class="btn btn-secondary btn-sm">Abrir Orden</a>
+        </div>
+      `).join("");
+    }
+  }
+
+  html += `</div>`;
+  container.innerHTML = html;
+  container.style.display = "block";
 }
 
 // -------------------------------------------------------------
@@ -186,7 +282,13 @@ function renderListaOrdenes() {
   });
 
   if (filtradas.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">No se encontraron órdenes.</td></tr>`;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2.5rem 1rem;">
+          No se encontraron órdenes de trabajo.
+        </td>
+      </tr>
+    `;
     return;
   }
 
@@ -202,7 +304,7 @@ function renderListaOrdenes() {
         <td>${veh.marca} ${veh.modelo} ${veh.año || ''}</td>
         <td><span class="license-plate-tag">${veh.placa || 'S/P'}</span></td>
         <td>${UTILS.getStatusBadgeHtml(ord.estado)}</td>
-        <td style="font-weight: 700; color: var(--accent-green);">${UTILS.formatMoney(ord.montoTotal)}</td>
+        <td style="font-weight: 700; color: var(--color-accent-red);">${UTILS.formatMoney(ord.montoTotal)}</td>
         <td>
           <a href="#orden-detalle/${ord.id}" class="btn btn-secondary btn-sm"><i class="fas fa-folder-open"></i> Abrir</a>
         </td>
@@ -230,7 +332,13 @@ function renderListaClientes() {
   });
 
   if (filtrados.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No hay clientes registrados.</td></tr>`;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2.5rem 1rem;">
+          No hay clientes registrados en el sistema. Presiona <strong>"+ NUEVO CLIENTE"</strong> para agregar el primero.
+        </td>
+      </tr>
+    `;
     return;
   }
 
@@ -244,7 +352,7 @@ function renderListaClientes() {
       <tr>
         <td><strong>${c.id}</strong></td>
         <td><strong>${c.nombre}</strong></td>
-        <td><a href="https://wa.me/${(c.telefono || '').replace(/\D/g, '')}" target="_blank" style="color: var(--accent-green);"><i class="fab fa-whatsapp"></i> ${c.telefono}</a></td>
+        <td><a href="https://wa.me/${(c.telefono || '').replace(/\D/g, '')}" target="_blank" style="color: #10B981; font-weight: 600;"><i class="fab fa-whatsapp"></i> ${c.telefono}</a></td>
         <td>${c.cedula || 'N/A'}</td>
         <td>${listaVehsHtml}</td>
         <td>${UTILS.formatDate(c.fechaRegistro)}</td>
@@ -278,7 +386,13 @@ function renderListaVehiculos() {
   });
 
   if (filtrados.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No se encontraron vehículos.</td></tr>`;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2.5rem 1rem;">
+          No hay vehículos registrados. Presiona <strong>"+ NUEVO VEHÍCULO"</strong> para agregar el primero.
+        </td>
+      </tr>
+    `;
     return;
   }
 
@@ -306,7 +420,6 @@ function verHistorialVehiculo(vehiculoId) {
   const veh = (STATE.db.vehiculos || []).find(v => v.id === vehiculoId);
   if (!veh) return;
 
-  // Navegar a la vista de órdenes y pre-filtrar por la placa/marca del vehículo
   window.location.hash = "ordenes";
   setTimeout(() => {
     const searchInput = document.getElementById("search-ordenes");
@@ -325,13 +438,12 @@ function renderOrdenDetalle(ordenId) {
   const container = document.getElementById("orden-detalle-container");
   if (!container) return;
 
-  // Asignar botón de retorno antes de validar la orden para que siempre funcione
   const backBtn = document.getElementById("btn-back-ordenes");
   if (backBtn) backBtn.onclick = () => { window.location.hash = "ordenes"; };
 
   const ord = (STATE.db.ordenes || []).find(o => o.id === ordenId);
   if (!ord) {
-    container.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--accent-red);">Órden no encontrada (ID: ${ordenId})</div>`;
+    container.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--color-accent-red);">Órden no encontrada (ID: ${ordenId})</div>`;
     return;
   }
 
@@ -356,7 +468,7 @@ function renderOrdenDetalle(ordenId) {
       <td>${item.descripcion}</td>
       <td style="text-align: center;">${item.cantidad}</td>
       <td style="text-align: right;">${UTILS.formatMoney(item.precioUnitario)}</td>
-      <td style="text-align: right; font-weight: bold; color: var(--accent-green);">${UTILS.formatMoney(item.subtotal)}</td>
+      <td style="text-align: right; font-weight: bold; color: var(--color-accent-red);">${UTILS.formatMoney(item.subtotal)}</td>
     </tr>
   `).join("");
 
@@ -365,10 +477,10 @@ function renderOrdenDetalle(ordenId) {
 
       <!-- COLUMNA PRINCIPAL -->
       <div>
-        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem; margin-bottom: 1.5rem;">
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-card);">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
             <div>
-              <h2>ÓRDEN N° ${ord.id}</h2>
+              <h2 style="color: var(--color-primary);">ÓRDEN N° ${ord.id}</h2>
               <p style="color: var(--text-muted); font-size: 0.85rem;">Ingreso: ${UTILS.formatDate(ord.fechaIngreso, true)}</p>
             </div>
             <div>
@@ -376,10 +488,10 @@ function renderOrdenDetalle(ordenId) {
             </div>
           </div>
 
-          <div style="background: var(--bg-input); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 1rem;">
+          <div style="background: #F8F9FA; padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 1rem;">
             <p style="font-size: 0.9rem;"><strong>Motivo de Ingreso:</strong></p>
             <p style="color: var(--text-main); font-size: 1rem; margin-top: 0.2rem;">${ord.motivoVisita}</p>
-            ${ord.diagnostico ? `<p style="font-size: 0.85rem; color: var(--accent-gold); margin-top: 0.5rem;"><strong>Diagnóstico Técnico:</strong> ${ord.diagnostico}</p>` : ''}
+            ${ord.diagnostico ? `<p style="font-size: 0.85rem; color: var(--color-secondary); margin-top: 0.5rem;"><strong>Diagnóstico Técnico:</strong> ${ord.diagnostico}</p>` : ''}
           </div>
 
           <!-- BOTONES DE CAMBIO DE ESTADO -->
@@ -413,9 +525,9 @@ function renderOrdenDetalle(ordenId) {
                 ${detalles.length > 0 ? detallesHtml : '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Aún no se han agregado ítems o costos.</td></tr>'}
               </tbody>
               <tfoot>
-                <tr style="background: rgba(16, 185, 129, 0.1); font-size: 1.1rem; font-weight: 800;">
+                <tr style="background: rgba(206, 17, 38, 0.06); font-size: 1.1rem; font-weight: 700;">
                   <td colspan="5" style="text-align: right;">TOTAL GENERAL:</td>
-                  <td style="text-align: right; color: var(--accent-green);">${UTILS.formatMoney(ord.montoTotal)}</td>
+                  <td style="text-align: right; color: var(--color-accent-red);">${UTILS.formatMoney(ord.montoTotal)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -424,7 +536,7 @@ function renderOrdenDetalle(ordenId) {
         </div>
 
         <!-- FOTOS -->
-        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem;">
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem; box-shadow: var(--shadow-card);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h3>Evidencia Fotográfica (${fotos.length})</h3>
             <button class="btn btn-secondary btn-sm" onclick="abrirModalSubirFoto('${ord.id}')"><i class="fas fa-camera"></i> Subir Foto</button>
@@ -437,9 +549,9 @@ function renderOrdenDetalle(ordenId) {
 
       <!-- COLUMNA LATERAL (INFO CLIENTE Y VEHÍCULO) -->
       <div>
-        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.25rem;">
-          <h3 style="font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.8rem;">
-            <i class="fas fa-user" style="color: var(--accent-gold);"></i> Cliente
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: var(--shadow-card);">
+          <h3 style="font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.8rem; color: var(--color-primary);">
+            <i class="fas fa-user"></i> Cliente
           </h3>
           <p><strong>${cli.nombre}</strong></p>
           <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.3rem;"><i class="fas fa-phone"></i> ${cli.telefono}</p>
@@ -448,9 +560,9 @@ function renderOrdenDetalle(ordenId) {
           </a>
         </div>
 
-        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem;">
-          <h3 style="font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.8rem;">
-            <i class="fas fa-car" style="color: var(--accent-gold);"></i> Vehículo
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; box-shadow: var(--shadow-card);">
+          <h3 style="font-size: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.8rem; color: var(--color-primary);">
+            <i class="fas fa-car"></i> Vehículo
           </h3>
           <p><strong>${veh.marca} ${veh.modelo}</strong> (${veh.año})</p>
           <p style="margin-top: 0.5rem;"><span class="license-plate-tag">${veh.placa || 'SIN PLACA'}</span></p>
@@ -462,10 +574,8 @@ function renderOrdenDetalle(ordenId) {
     </div>
   `;
 
-  // Configurar botones de acción superior
   document.getElementById("btn-subir-foto-orden").onclick = () => abrirModalSubirFoto(ord.id);
   document.getElementById("btn-imprimir-constancia").onclick = () => PRINT_MODULE.printOrder(ord, cli, veh, detalles, fotos);
-  document.getElementById("btn-back-ordenes").onclick = () => { window.location.hash = "ordenes"; };
 }
 
 async function cambiarEstadoOrden(ordenId, nuevoEstado) {
@@ -504,24 +614,30 @@ function initEventListeners() {
     checkAuthStatus();
   };
 
-  // Modal Config Cloud
-  document.getElementById("btn-config-cloud").onclick = () => {
-    document.getElementById("input-api-url").value = API.getApiUrl();
-    document.getElementById("modal-config-cloud").classList.remove("hidden");
-  };
+  // Close welcome banner
+  const closeWelcomeBtn = document.getElementById("btn-close-welcome");
+  if (closeWelcomeBtn) {
+    closeWelcomeBtn.onclick = () => {
+      document.getElementById("welcome-banner").style.display = "none";
+    };
+  }
 
-  document.getElementById("btn-save-api-url").onclick = () => {
-    const url = document.getElementById("input-api-url").value;
-    API.setApiUrl(url);
-    updateCloudStatusBadge();
-    document.getElementById("modal-config-cloud").classList.add("hidden");
-    UTILS.showToast("Configuración guardada");
-    cargarDatosYRenderizar();
-  };
+  // Global search
+  const globalSearchInput = document.getElementById("global-search-input");
+  if (globalSearchInput) {
+    globalSearchInput.oninput = ejecutarBusquedaGlobal;
+  }
 
   // Abrir Modal Nueva Orden
   document.querySelectorAll(".btn-open-nueva-orden").forEach(btn => {
     btn.onclick = () => {
+      const clientes = STATE.db.clientes || [];
+      if (clientes.length === 0) {
+        UTILS.showToast("Debes registrar un cliente primero antes de crear una orden", "info");
+        document.getElementById("modal-nuevo-cliente").classList.remove("hidden");
+        return;
+      }
+
       poblarSelectClientes();
       document.getElementById("modal-nueva-orden").classList.remove("hidden");
     };
@@ -539,6 +655,10 @@ function initEventListeners() {
 
   document.getElementById("btn-quick-crear-vehiculo").onclick = () => {
     const cliId = document.getElementById("select-orden-cliente").value;
+    if (!cliId) {
+      UTILS.showToast("Selecciona el cliente primero", "info");
+      return;
+    }
     abrirModalNuevoVehiculoParaCliente(cliId);
   };
 
@@ -599,6 +719,12 @@ function initEventListeners() {
 
   // Modal Nuevo Vehículo Submit
   document.getElementById("btn-modal-nuevo-vehiculo").onclick = () => {
+    const clientes = STATE.db.clientes || [];
+    if (clientes.length === 0) {
+      UTILS.showToast("Registra un cliente primero para asignarle un vehículo", "info");
+      document.getElementById("modal-nuevo-cliente").classList.remove("hidden");
+      return;
+    }
     poblarSelectClientesModalVehiculo();
     document.getElementById("modal-nuevo-vehiculo").classList.remove("hidden");
   };
@@ -681,12 +807,26 @@ function initEventListeners() {
     }
   });
 
-  // Cierre de Modales
+  // Cierre de Modales (clic en X o backdrop o Escape)
   document.querySelectorAll(".modal-close").forEach(btn => {
     btn.onclick = (e) => {
       const modal = e.target.closest(".modal-overlay");
       if (modal) modal.classList.add("hidden");
     };
+  });
+
+  document.querySelectorAll(".modal-overlay").forEach(overlay => {
+    overlay.onclick = (e) => {
+      if (e.target === overlay) {
+        overlay.classList.add("hidden");
+      }
+    };
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      document.querySelectorAll(".modal-overlay").forEach(m => m.classList.add("hidden"));
+    }
   });
 
   // Búsquedas en vivo

@@ -7,7 +7,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="index.css">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#0b132b">
+  <link rel="icon" type="image/png" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <meta name="theme-color" content="#002D62">
 </head>
 <body>
 
@@ -54,7 +56,7 @@
         </div>
         <div class="brand-info">
           <h1>TALLER EL VARÓN</h1>
-          <p><i class="fas fa-location-dot"></i> Los Alcarrizos • Pablo Rosario</p>
+          <p><i class="fas fa-location-dot"></i> Calle Faisán No. 83, Los Alcarrizos • Pablo Rosario</p>
         </div>
       </div>
 
@@ -68,13 +70,13 @@
       </nav>
 
       <div class="user-area">
-        <button id="btn-config-cloud" class="btn btn-secondary btn-sm" title="Configurar conexión Google Sheets">
-          <i class="fas fa-cloud"></i> <span id="cloud-status-text">Conexión</span>
-        </button>
+        <div class="user-badge" id="cloud-status-badge" title="Conexión en tiempo real activa">
+          <i class="fas fa-wifi" style="color: #10B981;"></i> Nube Sincronizada
+        </div>
         <div class="user-badge">
           <i class="fas fa-user-circle"></i> Pablo Rosario
         </div>
-        <button id="btn-logout" class="btn btn-secondary btn-sm" title="Cerrar sesión">
+        <button id="btn-logout" class="btn btn-secondary btn-sm" title="Cerrar sesión" style="color: #ffffff; background: rgba(255,255,255,0.15);">
           <i class="fas fa-power-off"></i>
         </button>
       </div>
@@ -85,16 +87,37 @@
 
       <!-- VISTA 1: DASHBOARD -->
       <section id="view-dashboard" class="view-section active-view">
+        
+        <!-- BANNER DE BIENVENIDA GUÍA PARA PABLO -->
+        <div id="welcome-banner" style="background: linear-gradient(135deg, #002D62, #0A4A8F); color: white; padding: 1.25rem 1.5rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow-card);">
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <div style="font-size: 2rem; color: #FFEC00;"><i class="fas fa-hand-wave"></i></div>
+            <div>
+              <h3 style="color: white; font-size: 1.1rem; margin-bottom: 0.2rem;">¡Bienvenido, Pablo Rosario!</h3>
+              <p style="font-size: 0.88rem; color: #E2E8F0;">Para registrar la entrada de un vehículo, presiona el botón <strong>"+ NUEVO INGRESO DE VEHÍCULO"</strong>. Todo quedará guardado automáticamente en tu Google Sheet.</p>
+            </div>
+          </div>
+          <button id="btn-close-welcome" class="btn btn-secondary btn-sm" style="background: rgba(255,255,255,0.2); color: white; border: none;"><i class="fas fa-times"></i> Entendido</button>
+        </div>
+
         <div class="action-bar">
           <div>
-            <h2>Panel de Control</h2>
-            <p style="color: var(--text-muted); font-size: 0.85rem;">Resumen de actividad del taller</p>
+            <h2>Panel de Control & Reportería</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Resumen financiero y actividad diaria de Taller El Varón</p>
           </div>
           <button class="btn btn-primary btn-open-nueva-orden">
             <i class="fas fa-plus-circle"></i> NUEVO INGRESO DE VEHÍCULO
           </button>
         </div>
 
+        <!-- BÚSQUEDA GLOBAL UNIFICADA -->
+        <div class="search-box" style="margin-bottom: 1.5rem;">
+          <i class="fas fa-search"></i>
+          <input type="text" id="global-search-input" class="search-input" placeholder="🔍 Búsqueda rápida global: escribe nombre, teléfono, cédula, placa, vehículo o N° de orden...">
+        </div>
+        <div id="global-search-results" style="margin-bottom: 1.5rem; display: none;"></div>
+
+        <!-- TARJETAS DE ESTADÍSTICAS Y RESUMEN FINANCIERO -->
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-icon gold"><i class="fas fa-wrench"></i></div>
@@ -105,18 +128,26 @@
           </div>
 
           <div class="stat-card">
-            <div class="stat-icon blue"><i class="fas fa-car"></i></div>
+            <div class="stat-icon blue"><i class="fas fa-car-side"></i></div>
             <div class="stat-info">
-              <h4>Total Vehículos</h4>
-              <div class="value" id="stat-total-vehiculos">0</div>
+              <h4>Ingresados Hoy</h4>
+              <div class="value" id="stat-vehiculos-hoy">0</div>
             </div>
           </div>
 
           <div class="stat-card">
-            <div class="stat-icon green"><i class="fas fa-users"></i></div>
+            <div class="stat-icon green"><i class="fas fa-coins"></i></div>
             <div class="stat-info">
-              <h4>Clientes Registrados</h4>
-              <div class="value" id="stat-total-clientes">0</div>
+              <h4>Cobrado Hoy</h4>
+              <div class="value money" id="stat-cobrado-hoy">RD$ 0.00</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class="fas fa-calendar-check"></i></div>
+            <div class="stat-info">
+              <h4>Cobrado Mes</h4>
+              <div class="value money" id="stat-cobrado-mes">RD$ 0.00</div>
             </div>
           </div>
         </div>
@@ -301,40 +332,40 @@
   <div id="modal-nueva-orden" class="modal-overlay hidden">
     <div class="modal-container">
       <div class="modal-header">
-        <h3><i class="fas fa-plus-circle" style="color: var(--accent-gold);"></i> Registro de Nuevo Ingreso de Vehículo</h3>
+        <h3><i class="fas fa-plus-circle" style="color: var(--color-accent-red);"></i> Registro de Nuevo Ingreso de Vehículo</h3>
         <button class="close-btn modal-close">&times;</button>
       </div>
 
       <form id="form-nueva-orden">
         <div class="modal-body">
           <div class="form-group">
-            <label for="select-orden-cliente"><strong>1. Seleccionar Cliente</strong></label>
+            <label for="select-orden-cliente"><strong>1. Seleccionar Cliente *</strong></label>
             <select id="select-orden-cliente" class="form-control" required>
               <option value="">-- Clic para seleccionar cliente --</option>
             </select>
-            <p style="font-size: 0.8rem; color: var(--accent-gold); margin-top: 0.2rem; cursor: pointer;" id="btn-quick-crear-cliente">
+            <p style="font-size: 0.82rem; color: var(--color-secondary); margin-top: 0.3rem; cursor: pointer; font-weight: 600;" id="btn-quick-crear-cliente">
               + ¿Cliente nuevo? Haz clic aquí para registrarlo primero.
             </p>
           </div>
 
           <div class="form-group">
-            <label for="select-orden-vehiculo"><strong>2. Seleccionar Vehículo</strong></label>
+            <label for="select-orden-vehiculo"><strong>2. Seleccionar Vehículo *</strong></label>
             <select id="select-orden-vehiculo" class="form-control" required disabled>
               <option value="">-- Primero selecciona un cliente --</option>
             </select>
-            <p style="font-size: 0.8rem; color: var(--accent-gold); margin-top: 0.2rem; cursor: pointer;" id="btn-quick-crear-vehiculo">
+            <p style="font-size: 0.82rem; color: var(--color-secondary); margin-top: 0.3rem; cursor: pointer; font-weight: 600;" id="btn-quick-crear-vehiculo">
               + ¿Vehículo nuevo? Haz clic aquí para agregarlo a este cliente.
             </p>
           </div>
 
           <div class="form-group">
-            <label for="input-orden-motivo"><strong>3. Motivo de la visita / Falla reportada</strong></label>
+            <label for="input-orden-motivo"><strong>3. Motivo de la visita / Falla reportada *</strong></label>
             <textarea id="input-orden-motivo" class="form-control" rows="3" placeholder="Ej: Cambio de bujías y ruido en frenos al pisar el pedal..." required></textarea>
           </div>
 
           <div class="form-group">
             <label for="input-orden-km">Kilometraje de Entrada</label>
-            <input type="number" id="input-orden-km" class="form-control" placeholder="Ej: 85000">
+            <input type="number" id="input-orden-km" class="form-control" placeholder="Ej: 85000" min="0">
           </div>
 
           <div class="form-group">
@@ -355,7 +386,7 @@
   <div id="modal-nuevo-cliente" class="modal-overlay hidden">
     <div class="modal-container">
       <div class="modal-header">
-        <h3><i class="fas fa-user-plus" style="color: var(--accent-gold);"></i> Registrar Nuevo Cliente</h3>
+        <h3><i class="fas fa-user-plus" style="color: var(--color-primary);"></i> Registrar Nuevo Cliente</h3>
         <button class="close-btn modal-close">&times;</button>
       </div>
 
@@ -399,7 +430,7 @@
   <div id="modal-nuevo-vehiculo" class="modal-overlay hidden">
     <div class="modal-container">
       <div class="modal-header">
-        <h3><i class="fas fa-car" style="color: var(--accent-gold);"></i> Registrar Nuevo Vehículo</h3>
+        <h3><i class="fas fa-car" style="color: var(--color-primary);"></i> Registrar Nuevo Vehículo</h3>
         <button class="close-btn modal-close">&times;</button>
       </div>
 
@@ -424,7 +455,7 @@
 
           <div class="form-group">
             <label for="veh-ano">Año *</label>
-            <input type="number" id="veh-ano" class="form-control" placeholder="Ej: 2017" required>
+            <input type="number" id="veh-ano" class="form-control" placeholder="Ej: 2017" required min="1950" max="2030">
           </div>
 
           <div class="form-group">
@@ -463,7 +494,7 @@
         <input type="hidden" id="item-orden-id">
         <div class="modal-body">
           <div class="form-group">
-            <label for="item-tipo">Tipo</label>
+            <label for="item-tipo">Tipo *</label>
             <select id="item-tipo" class="form-control" required>
               <option value="Mano de Obra">Mano de Obra / Servicio</option>
               <option value="Repuesto">Repuesto / Pieza</option>
@@ -482,7 +513,7 @@
 
           <div class="form-group">
             <label for="item-precio">Precio Unitario (RD$) *</label>
-            <input type="number" id="item-precio" class="form-control" placeholder="Ej: 1500" required step="0.01">
+            <input type="number" id="item-precio" class="form-control" placeholder="Ej: 1500" min="0" step="0.01" required>
           </div>
         </div>
 
@@ -541,36 +572,6 @@
 
       <div class="modal-body" id="print-modal-content" style="padding: 0;">
         <!-- Se genera con PRINT_MODULE.generateReceiptHtml() -->
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: CONFIGURAR CONEXIÓN GOOGLE SHEETS -->
-  <div id="modal-config-cloud" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 550px;">
-      <div class="modal-header">
-        <h3><i class="fas fa-cloud"></i> Configuración de Base de Datos</h3>
-        <button class="close-btn modal-close">&times;</button>
-      </div>
-
-      <div class="modal-body">
-        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
-          Para sincronizar datos en tiempo real entre la computadora y el teléfono de Pablo, ingresa aquí la URL del despliegue de <strong>Google Apps Script</strong>.
-        </p>
-
-        <div class="form-group">
-          <label for="input-api-url">URL Web App de Google Apps Script</label>
-          <input type="url" id="input-api-url" class="form-control" placeholder="https://script.google.com/macros/s/.../exec">
-        </div>
-
-        <p style="font-size: 0.8rem; color: var(--text-muted);">
-          * Si dejas este campo vacío, la aplicación funcionará en <strong>Modo Local</strong> guardando los datos en la memoria de la PC o teléfono.
-        </p>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary modal-close">Cerrar</button>
-        <button type="button" id="btn-save-api-url" class="btn btn-primary">GUARDAR CONEXIÓN</button>
       </div>
     </div>
   </div>
