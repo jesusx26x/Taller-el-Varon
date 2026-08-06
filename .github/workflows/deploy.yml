@@ -9,6 +9,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  deployments: write
 
 concurrency:
   group: "pages"
@@ -24,6 +25,7 @@ jobs:
       contents: read
       pages: write
       id-token: write
+      deployments: write
     timeout-minutes: 5
 
     steps:
