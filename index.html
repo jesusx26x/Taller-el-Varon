@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Taller El Varón — Sistema de Gestión Mecánica</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="index.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b132b">
+</head>
+<body>
+
+  <!-- PANTALLA DE INICIO DE SESIÓN -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">
+        <i class="fas fa-wrench"></i>
+      </div>
+      <h2>TALLER EL VARÓN</h2>
+      <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
+        Mecánica en General • Especialidad Japoneses y Americanos
+      </p>
+
+      <form id="form-login">
+        <div class="form-group">
+          <label for="login-user"><i class="fas fa-user"></i> Usuario</label>
+          <input type="text" id="login-user" class="form-control" value="prosario" required autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label for="login-pass"><i class="fas fa-lock"></i> Contraseña</label>
+          <input type="password" id="login-pass" class="form-control" value="tallerelvaron" required autocomplete="current-password">
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+          <i class="fas fa-right-to-bracket"></i> INGRESAR AL SISTEMA
+        </button>
+      </form>
+
+      <p style="margin-top: 1.5rem; font-size: 0.75rem; color: var(--text-muted);">
+        Sistema para Pablo Rosario • Los Alcarrizos, Santo Domingo
+      </p>
+    </div>
+  </div>
+
+  <!-- APLICACIÓN PRINCIPAL -->
+  <div id="app-container" style="display: none;">
+    <!-- BARRA SUPERIOR -->
+    <header class="app-header">
+      <div class="brand-area">
+        <div class="brand-logo-icon">
+          <i class="fas fa-car-wrench"></i>
+        </div>
+        <div class="brand-info">
+          <h1>TALLER EL VARÓN</h1>
+          <p><i class="fas fa-location-dot"></i> Los Alcarrizos • Pablo Rosario</p>
+        </div>
+      </div>
+
+      <nav>
+        <ul class="nav-links">
+          <li><a href="#dashboard" class="nav-btn active" id="nav-dashboard"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+          <li><a href="#ordenes" class="nav-btn" id="nav-ordenes"><i class="fas fa-file-invoice-dollar"></i> Órdenes</a></li>
+          <li><a href="#clientes" class="nav-btn" id="nav-clientes"><i class="fas fa-users"></i> Clientes</a></li>
+          <li><a href="#vehiculos" class="nav-btn" id="nav-vehiculos"><i class="fas fa-car"></i> Vehículos</a></li>
+        </ul>
+      </nav>
+
+      <div class="user-area">
+        <button id="btn-config-cloud" class="btn btn-secondary btn-sm" title="Configurar conexión Google Sheets">
+          <i class="fas fa-cloud"></i> <span id="cloud-status-text">Conexión</span>
+        </button>
+        <div class="user-badge">
+          <i class="fas fa-user-circle"></i> Pablo Rosario
+        </div>
+        <button id="btn-logout" class="btn btn-secondary btn-sm" title="Cerrar sesión">
+          <i class="fas fa-power-off"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="main-content">
+
+      <!-- VISTA 1: DASHBOARD -->
+      <section id="view-dashboard" class="view-section active-view">
+        <div class="action-bar">
+          <div>
+            <h2>Panel de Control</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Resumen de actividad del taller</p>
+          </div>
+          <button class="btn btn-primary btn-open-nueva-orden">
+            <i class="fas fa-plus-circle"></i> NUEVO INGRESO DE VEHÍCULO
+          </button>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon gold"><i class="fas fa-wrench"></i></div>
+            <div class="stat-info">
+              <h4>En Taller Hoy</h4>
+              <div class="value" id="stat-en-taller">0</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class="fas fa-car"></i></div>
+            <div class="stat-info">
+              <h4>Total Vehículos</h4>
+              <div class="value" id="stat-total-vehiculos">0</div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="fas fa-users"></i></div>
+            <div class="stat-info">
+              <h4>Clientes Registrados</h4>
+              <div class="value" id="stat-total-clientes">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3>Últimas Órdenes de Trabajo</h3>
+            <a href="#ordenes" style="font-size: 0.85rem; font-weight: 600;">Ver todas <i class="fas fa-arrow-right"></i></a>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>N° Orden</th>
+                  <th>Fecha Ingreso</th>
+                  <th>Cliente</th>
+                  <th>Vehículo</th>
+                  <th>Placa</th>
+                  <th>Estado</th>
+                  <th>Monto Total</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="tbl-dashboard-ordenes">
+                <!-- Se llena con JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VISTA 2: ÓRDENES -->
+      <section id="view-ordenes" class="view-section">
+        <div class="action-bar">
+          <div>
+            <h2>Órdenes de Trabajo</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Historial y seguimiento de reparaciones</p>
+          </div>
+          <button class="btn btn-primary btn-open-nueva-orden">
+            <i class="fas fa-plus-circle"></i> NUEVA ÓRDEN
+          </button>
+        </div>
+
+        <div class="action-bar">
+          <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" id="search-ordenes" class="search-input" placeholder="Buscar por cliente, placa, marca o N° de orden...">
+          </div>
+          <div>
+            <select id="filter-estado-orden" class="form-control" style="width: auto;">
+              <option value="TODOS">Todos los Estados</option>
+              <option value="Pendiente">Pendiente</option>
+              <option value="En Proceso">En Proceso</option>
+              <option value="Listo">Listo</option>
+              <option value="Entregado">Entregado</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>N° Orden</th>
+                <th>Fecha Ingreso</th>
+                <th>Cliente</th>
+                <th>Vehículo</th>
+                <th>Placa</th>
+                <th>Estado</th>
+                <th>Monto (RD$)</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tbl-lista-ordenes">
+              <!-- Se llena con JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- VISTA 3: CLIENTES -->
+      <section id="view-clientes" class="view-section">
+        <div class="action-bar">
+          <div>
+            <h2>Directorio de Clientes</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Clientes registrados en el taller</p>
+          </div>
+          <button class="btn btn-primary" id="btn-modal-nuevo-cliente">
+            <i class="fas fa-user-plus"></i> NUEVO CLIENTE
+          </button>
+        </div>
+
+        <div class="search-box" style="margin-bottom: 1.5rem;">
+          <i class="fas fa-search"></i>
+          <input type="text" id="search-clientes" class="search-input" placeholder="Buscar cliente por nombre, teléfono o cédula...">
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Nombre Completo</th>
+                <th>Teléfono / WhatsApp</th>
+                <th>Cédula</th>
+                <th>Vehículos</th>
+                <th>Fecha Registro</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tbl-lista-clientes">
+              <!-- Se llena con JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- VISTA 4: VEHÍCULOS & HISTORIAL -->
+      <section id="view-vehiculos" class="view-section">
+        <div class="action-bar">
+          <div>
+            <h2>Bitácora de Vehículos</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Historial completo por vehículo (Marca, Placa, Modelo)</p>
+          </div>
+          <button class="btn btn-primary" id="btn-modal-nuevo-vehiculo">
+            <i class="fas fa-car-side"></i> NUEVO VEHÍCULO
+          </button>
+        </div>
+
+        <div class="search-box" style="margin-bottom: 1.5rem;">
+          <i class="fas fa-search"></i>
+          <input type="text" id="search-vehiculos" class="search-input" placeholder="Buscar vehículo por placa, marca, modelo o cliente...">
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Placa</th>
+                <th>Marca & Modelo</th>
+                <th>Año</th>
+                <th>Color</th>
+                <th>Propietario</th>
+                <th>Total Visitas</th>
+                <th>Historial</th>
+              </tr>
+            </thead>
+            <tbody id="tbl-lista-vehiculos">
+              <!-- Se llena con JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- VISTA 5: DETALLE DE ÓRDEN -->
+      <section id="view-orden-detalle" class="view-section">
+        <div class="action-bar">
+          <button class="btn btn-secondary btn-sm" id="btn-back-ordenes">
+            <i class="fas fa-arrow-left"></i> Volver a Lista de Órdenes
+          </button>
+
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-secondary btn-sm" id="btn-subir-foto-orden">
+              <i class="fas fa-camera"></i> Subir Foto Evidencia
+            </button>
+            <button class="btn btn-primary btn-sm" id="btn-imprimir-constancia">
+              <i class="fas fa-print"></i> IMPRIMIR CONSTANCIA
+            </button>
+          </div>
+        </div>
+
+        <div id="orden-detalle-container">
+          <!-- Se llena dinámicamente con JS -->
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL: NUEVO INGRESO / NUEVA ÓRDEN -->
+  <div id="modal-nueva-orden" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-plus-circle" style="color: var(--accent-gold);"></i> Registro de Nuevo Ingreso de Vehículo</h3>
+        <button class="close-btn modal-close">&times;</button>
+      </div>
+
+      <form id="form-nueva-orden">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="select-orden-cliente"><strong>1. Seleccionar Cliente</strong></label>
+            <select id="select-orden-cliente" class="form-control" required>
+              <option value="">-- Clic para seleccionar cliente --</option>
+            </select>
+            <p style="font-size: 0.8rem; color: var(--accent-gold); margin-top: 0.2rem; cursor: pointer;" id="btn-quick-crear-cliente">
+              + ¿Cliente nuevo? Haz clic aquí para registrarlo primero.
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label for="select-orden-vehiculo"><strong>2. Seleccionar Vehículo</strong></label>
+            <select id="select-orden-vehiculo" class="form-control" required disabled>
+              <option value="">-- Primero selecciona un cliente --</option>
+            </select>
+            <p style="font-size: 0.8rem; color: var(--accent-gold); margin-top: 0.2rem; cursor: pointer;" id="btn-quick-crear-vehiculo">
+              + ¿Vehículo nuevo? Haz clic aquí para agregarlo a este cliente.
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label for="input-orden-motivo"><strong>3. Motivo de la visita / Falla reportada</strong></label>
+            <textarea id="input-orden-motivo" class="form-control" rows="3" placeholder="Ej: Cambio de bujías y ruido en frenos al pisar el pedal..." required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="input-orden-km">Kilometraje de Entrada</label>
+            <input type="number" id="input-orden-km" class="form-control" placeholder="Ej: 85000">
+          </div>
+
+          <div class="form-group">
+            <label for="input-orden-diagnostico">Diagnóstico inicial / Observaciones</label>
+            <textarea id="input-orden-diagnostico" class="form-control" rows="2" placeholder="Notas técnicas iniciales de Pablo..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> GUARDAR Y CREAR ÓRDEN</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: NUEVO CLIENTE -->
+  <div id="modal-nuevo-cliente" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-user-plus" style="color: var(--accent-gold);"></i> Registrar Nuevo Cliente</h3>
+        <button class="close-btn modal-close">&times;</button>
+      </div>
+
+      <form id="form-nuevo-cliente">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="cli-nombre">Nombre y Apellidos *</label>
+            <input type="text" id="cli-nombre" class="form-control" placeholder="Ej: Juan Pérez" required>
+          </div>
+
+          <div class="form-group">
+            <label for="cli-telefono">Teléfono / WhatsApp *</label>
+            <input type="text" id="cli-telefono" class="form-control" placeholder="Ej: 809-555-1234" required>
+          </div>
+
+          <div class="form-group">
+            <label for="cli-cedula">Cédula (opcional)</label>
+            <input type="text" id="cli-cedula" class="form-control" placeholder="Ej: 001-1234567-8">
+          </div>
+
+          <div class="form-group">
+            <label for="cli-email">Correo Electrónico (opcional)</label>
+            <input type="email" id="cli-email" class="form-control" placeholder="ejemplo@correo.com">
+          </div>
+
+          <div class="form-group">
+            <label for="cli-notas">Notas / Preferencias del cliente</label>
+            <textarea id="cli-notas" class="form-control" rows="2" placeholder="Notas sobre el cliente..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> GUARDAR CLIENTE</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: NUEVO VEHÍCULO -->
+  <div id="modal-nuevo-vehiculo" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-car" style="color: var(--accent-gold);"></i> Registrar Nuevo Vehículo</h3>
+        <button class="close-btn modal-close">&times;</button>
+      </div>
+
+      <form id="form-nuevo-vehiculo">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="veh-cliente">Propietario / Cliente *</label>
+            <select id="veh-cliente" class="form-control" required>
+              <option value="">-- Selecciona el cliente --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="veh-marca">Marca *</label>
+            <input type="text" id="veh-marca" class="form-control" placeholder="Ej: Honda, Toyota, Hyundai, Ford" required>
+          </div>
+
+          <div class="form-group">
+            <label for="veh-modelo">Modelo *</label>
+            <input type="text" id="veh-modelo" class="form-control" placeholder="Ej: Civic, Corolla, Tucson, Focus" required>
+          </div>
+
+          <div class="form-group">
+            <label for="veh-ano">Año *</label>
+            <input type="number" id="veh-ano" class="form-control" placeholder="Ej: 2017" required>
+          </div>
+
+          <div class="form-group">
+            <label for="veh-color">Color *</label>
+            <input type="text" id="veh-color" class="form-control" placeholder="Ej: Gris, Azul, Negro" required>
+          </div>
+
+          <div class="form-group">
+            <label for="veh-placa">Placa / Matrícula (opcional)</label>
+            <input type="text" id="veh-placa" class="form-control" placeholder="Ej: A123456">
+          </div>
+
+          <div class="form-group">
+            <label for="veh-vin">Chasis / VIN (opcional)</label>
+            <input type="text" id="veh-vin" class="form-control" placeholder="Número de chasis">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> GUARDAR VEHÍCULO</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: AGREGAR ITEM A ÓRDEN -->
+  <div id="modal-agregar-item" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-plus-circle"></i> Agregar Servicio o Repuesto a la Órden</h3>
+        <button class="close-btn modal-close">&times;</button>
+      </div>
+
+      <form id="form-agregar-item">
+        <input type="hidden" id="item-orden-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="item-tipo">Tipo</label>
+            <select id="item-tipo" class="form-control" required>
+              <option value="Mano de Obra">Mano de Obra / Servicio</option>
+              <option value="Repuesto">Repuesto / Pieza</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="item-descripcion">Descripción del trabajo o repuesto *</label>
+            <input type="text" id="item-descripcion" class="form-control" placeholder="Ej: Cambio de pastillas delanteras" required>
+          </div>
+
+          <div class="form-group">
+            <label for="item-cantidad">Cantidad *</label>
+            <input type="number" id="item-cantidad" class="form-control" value="1" min="1" required>
+          </div>
+
+          <div class="form-group">
+            <label for="item-precio">Precio Unitario (RD$) *</label>
+            <input type="number" id="item-precio" class="form-control" placeholder="Ej: 1500" required step="0.01">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> AGREGAR A ÓRDEN</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: SUBIR FOTO EVIDENCIA -->
+  <div id="modal-subir-foto" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-camera"></i> Subir Foto de Evidencia</h3>
+        <button class="close-btn modal-close">&times;</button>
+      </div>
+
+      <form id="form-subir-foto">
+        <input type="hidden" id="foto-orden-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="foto-input">Tomar foto o seleccionar archivo *</label>
+            <input type="file" id="foto-input" class="form-control" accept="image/*" capture="environment" required>
+          </div>
+
+          <div id="foto-preview-container" style="text-align: center; margin: 1rem 0; display: none;">
+            <img id="foto-preview-img" style="max-width: 100%; max-height: 250px; border-radius: 8px; border: 1px solid var(--border-color);" src="" alt="Vista previa">
+          </div>
+
+          <div class="form-group">
+            <label for="foto-descripcion">Descripción corta de la foto</label>
+            <input type="text" id="foto-descripcion" class="form-control" placeholder="Ej: Estado inicial del freno delantero">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> GUARDAR FOTO</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: IMPRESIÓN DE CONSTANCIA -->
+  <div id="print-modal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 850px;">
+      <div class="modal-header no-print">
+        <h3><i class="fas fa-print"></i> Vista Previa de Constancia Imprimible</h3>
+        <div>
+          <button class="btn btn-primary btn-sm" onclick="window.print()"><i class="fas fa-print"></i> IMPRIMIR AHORA</button>
+          <button class="close-btn modal-close">&times;</button>
+        </div>
+      </div>
+
+      <div class="modal-body" id="print-modal-content" style="padding: 0;">
+        <!-- Se genera con PRINT_MODULE.generateReceiptHtml() -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CONFIGURAR CONEXIÓN GOOGLE SHEETS -->
+  <div id="modal-config-cloud" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 550px;">
+      <div class="modal-header">
+        <h3><i class="fas fa-cloud"></i> Configuración de Base de Datos</h3>
+        <button class="close-btn modal-close">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Para sincronizar datos en tiempo real entre la computadora y el teléfono de Pablo, ingresa aquí la URL del despliegue de <strong>Google Apps Script</strong>.
+        </p>
+
+        <div class="form-group">
+          <label for="input-api-url">URL Web App de Google Apps Script</label>
+          <input type="url" id="input-api-url" class="form-control" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+
+        <p style="font-size: 0.8rem; color: var(--text-muted);">
+          * Si dejas este campo vacío, la aplicación funcionará en <strong>Modo Local</strong> guardando los datos en la memoria de la PC o teléfono.
+        </p>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary modal-close">Cerrar</button>
+        <button type="button" id="btn-save-api-url" class="btn btn-primary">GUARDAR CONEXIÓN</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="utils.js"></script>
+  <script src="api.js"></script>
+  <script src="print.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
