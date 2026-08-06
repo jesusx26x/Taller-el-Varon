@@ -56,10 +56,14 @@ function checkAuthStatus() {
 async function cargarDatosYRenderizar() {
   try {
     STATE.db = await API.obtenerTodo();
+    if (!STATE.db) {
+      STATE.db = { clientes: [], vehiculos: [], ordenes: [], detalleServicios: [], fotos: [] };
+    }
     renderCurrentView();
   } catch (err) {
     console.error("Error al cargar datos:", err);
-    UTILS.showToast("Error al cargar información", "error");
+    STATE.db = API.getLocalStore();
+    renderCurrentView();
   }
 }
 
@@ -103,22 +107,26 @@ function handleHashNavigation() {
 function renderCurrentView() {
   if (!STATE.db) return;
 
-  switch (STATE.currentView) {
-    case "dashboard":
-      renderDashboard();
-      break;
-    case "ordenes":
-      renderListaOrdenes();
-      break;
-    case "clientes":
-      renderListaClientes();
-      break;
-    case "vehiculos":
-      renderListaVehiculos();
-      break;
-    case "orden-detalle":
-      renderOrdenDetalle(STATE.selectedOrdenId);
-      break;
+  try {
+    switch (STATE.currentView) {
+      case "dashboard":
+        renderDashboard();
+        break;
+      case "ordenes":
+        renderListaOrdenes();
+        break;
+      case "clientes":
+        renderListaClientes();
+        break;
+      case "vehiculos":
+        renderListaVehiculos();
+        break;
+      case "orden-detalle":
+        renderOrdenDetalle(STATE.selectedOrdenId);
+        break;
+    }
+  } catch (err) {
+    console.error("Error al renderizar vista:", err);
   }
 }
 
@@ -139,12 +147,13 @@ function renderDashboard() {
 
   // 2. Ingresados Hoy
   const ingresadosHoy = ordenes.filter(o => {
-    return o.fechaIngreso && o.fechaIngreso.startsWith(todayStr);
+    const dateStr = String(o.fechaIngreso || '');
+    return dateStr.startsWith(todayStr);
   }).length;
 
   // 3. Total Cobrado Hoy
   const cobradoHoy = ordenes
-    .filter(o => o.fechaIngreso && o.fechaIngreso.startsWith(todayStr))
+    .filter(o => String(o.fechaIngreso || '').startsWith(todayStr))
     .reduce((sum, o) => sum + (Number(o.montoTotal) || 0), 0);
 
   // 4. Total Cobrado Mes
@@ -181,8 +190,8 @@ function renderDashboard() {
   }
 
   tbody.innerHTML = ultimas.map(ord => {
-    const cli = clientes.find(c => c.id === ord.clienteId) || { nombre: "Desconocido" };
-    const veh = vehiculos.find(v => v.id === ord.vehiculoId) || { marca: "", modelo: "", placa: "" };
+    const cli = clientes.find(c => String(c.id) === String(ord.clienteId)) || { nombre: "Desconocido" };
+    const veh = vehiculos.find(v => String(v.id) === String(ord.vehiculoId)) || { marca: "", modelo: "", placa: "" };
 
     return `
       <tr>
@@ -219,21 +228,21 @@ function ejecutarBusquedaGlobal() {
   const ordenes = STATE.db.ordenes || [];
 
   const matchClientes = clientes.filter(c =>
-    (c.nombre && c.nombre.toLowerCase().includes(query)) ||
-    (c.telefono && c.telefono.toLowerCase().includes(query)) ||
-    (c.cedula && c.cedula.toLowerCase().includes(query))
+    String(c.nombre || '').toLowerCase().includes(query) ||
+    String(c.telefono || '').toLowerCase().includes(query) ||
+    String(c.cedula || '').toLowerCase().includes(query)
   );
 
   const matchVehiculos = vehiculos.filter(v =>
-    (v.placa && v.placa.toLowerCase().includes(query)) ||
-    (v.marca && v.marca.toLowerCase().includes(query)) ||
-    (v.modelo && v.modelo.toLowerCase().includes(query)) ||
-    (v.vin && v.vin.toLowerCase().includes(query))
+    String(v.placa || '').toLowerCase().includes(query) ||
+    String(v.marca || '').toLowerCase().includes(query) ||
+    String(v.modelo || '').toLowerCase().includes(query) ||
+    String(v.vin || '').toLowerCase().includes(query)
   );
 
   const matchOrdenes = ordenes.filter(o =>
-    o.id.toLowerCase().includes(query) ||
-    (o.motivoVisita && o.motivoVisita.toLowerCase().includes(query))
+    String(o.id || '').toLowerCase().includes(query) ||
+    String(o.motivoVisita || '').toLowerCase().includes(query)
   );
 
   let html = `<div style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; box-shadow: var(--shadow-card);">`;
@@ -292,16 +301,16 @@ function renderListaOrdenes() {
   const estadoFilter = document.getElementById("filter-estado-orden").value;
 
   const filtradas = ordenes.filter(ord => {
-    const cli = clientes.find(c => c.id === ord.clienteId) || {};
-    const veh = vehiculos.find(v => v.id === ord.vehiculoId) || {};
+    const cli = clientes.find(c => String(c.id) === String(ord.clienteId)) || {};
+    const veh = vehiculos.find(v => String(v.id) === String(ord.vehiculoId)) || {};
 
     const matchState = estadoFilter === "TODOS" || ord.estado === estadoFilter;
     const matchSearch = !query || 
-      ord.id.toLowerCase().includes(query) ||
-      (cli.nombre && cli.nombre.toLowerCase().includes(query)) ||
-      (veh.placa && veh.placa.toLowerCase().includes(query)) ||
-      (veh.marca && veh.marca.toLowerCase().includes(query)) ||
-      (veh.modelo && veh.modelo.toLowerCase().includes(query));
+      String(ord.id || '').toLowerCase().includes(query) ||
+      String(cli.nombre || '').toLowerCase().includes(query) ||
+      String(veh.placa || '').toLowerCase().includes(query) ||
+      String(veh.marca || '').toLowerCase().includes(query) ||
+      String(veh.modelo || '').toLowerCase().includes(query);
 
     return matchState && matchSearch;
   });
@@ -318,8 +327,8 @@ function renderListaOrdenes() {
   }
 
   tbody.innerHTML = [...filtradas].reverse().map(ord => {
-    const cli = clientes.find(c => c.id === ord.clienteId) || { nombre: "N/A" };
-    const veh = vehiculos.find(v => v.id === ord.vehiculoId) || { marca: "", modelo: "", placa: "" };
+    const cli = clientes.find(c => String(c.id) === String(ord.clienteId)) || { nombre: "N/A" };
+    const veh = vehiculos.find(v => String(v.id) === String(ord.vehiculoId)) || { marca: "", modelo: "", placa: "" };
 
     return `
       <tr>
@@ -352,9 +361,9 @@ function renderListaClientes() {
 
   const filtrados = clientes.filter(c => {
     return !query ||
-      (c.nombre && c.nombre.toLowerCase().includes(query)) ||
-      (c.telefono && c.telefono.toLowerCase().includes(query)) ||
-      (c.cedula && c.cedula.toLowerCase().includes(query));
+      String(c.nombre || '').toLowerCase().includes(query) ||
+      String(c.telefono || '').toLowerCase().includes(query) ||
+      String(c.cedula || '').toLowerCase().includes(query);
   });
 
   if (filtrados.length === 0) {
@@ -369,16 +378,18 @@ function renderListaClientes() {
   }
 
   tbody.innerHTML = filtrados.map(c => {
-    const vehs = vehiculos.filter(v => v.clienteId === c.id);
+    const vehs = vehiculos.filter(v => String(v.clienteId) === String(c.id));
     const listaVehsHtml = vehs.length > 0 
       ? vehs.map(v => `<span class="badge badge-process" style="margin-right: 0.3rem;">${v.marca} ${v.modelo} (${v.placa || 'S/P'})</span>`).join(" ")
       : `<span style="color: var(--text-muted); font-size: 0.8rem;">Sin vehículos</span>`;
+
+    const telClean = String(c.telefono || '').replace(/\D/g, '');
 
     return `
       <tr>
         <td><strong>${c.id}</strong></td>
         <td><strong>${c.nombre}</strong></td>
-        <td><a href="https://wa.me/${(c.telefono || '').replace(/\D/g, '')}" target="_blank" style="color: #10B981; font-weight: 600;"><i class="fab fa-whatsapp"></i> ${c.telefono}</a></td>
+        <td><a href="https://wa.me/${telClean}" target="_blank" style="color: #10B981; font-weight: 600;"><i class="fab fa-whatsapp"></i> ${c.telefono}</a></td>
         <td>${c.cedula || 'N/A'}</td>
         <td>${listaVehsHtml}</td>
         <td>${UTILS.formatDate(c.fechaRegistro)}</td>
@@ -403,12 +414,12 @@ function renderListaVehiculos() {
   const query = (document.getElementById("search-vehiculos").value || "").toLowerCase();
 
   const filtrados = vehiculos.filter(v => {
-    const cli = clientes.find(c => c.id === v.clienteId) || {};
+    const cli = clientes.find(c => String(c.id) === String(v.clienteId)) || {};
     return !query ||
-      (v.placa && v.placa.toLowerCase().includes(query)) ||
-      (v.marca && v.marca.toLowerCase().includes(query)) ||
-      (v.modelo && v.modelo.toLowerCase().includes(query)) ||
-      (cli.nombre && cli.nombre.toLowerCase().includes(query));
+      String(v.placa || '').toLowerCase().includes(query) ||
+      String(v.marca || '').toLowerCase().includes(query) ||
+      String(v.modelo || '').toLowerCase().includes(query) ||
+      String(cli.nombre || '').toLowerCase().includes(query);
   });
 
   if (filtrados.length === 0) {
@@ -423,8 +434,8 @@ function renderListaVehiculos() {
   }
 
   tbody.innerHTML = filtrados.map(v => {
-    const cli = clientes.find(c => c.id === v.clienteId) || { nombre: "N/A" };
-    const historialOrdenes = ordenes.filter(o => o.vehiculoId === v.id);
+    const cli = clientes.find(c => String(c.id) === String(v.clienteId)) || { nombre: "N/A" };
+    const historialOrdenes = ordenes.filter(o => String(o.vehiculoId) === String(v.id));
 
     return `
       <tr>
@@ -443,7 +454,7 @@ function renderListaVehiculos() {
 }
 
 function verHistorialVehiculo(vehiculoId) {
-  const veh = (STATE.db.vehiculos || []).find(v => v.id === vehiculoId);
+  const veh = (STATE.db.vehiculos || []).find(v => String(v.id) === String(vehiculoId));
   if (!veh) return;
 
   window.location.hash = "ordenes";
@@ -487,10 +498,12 @@ function renderOrdenDetalle(ordenId) {
     return;
   }
 
-  const cli = (STATE.db.clientes || []).find(c => c.id === ord.clienteId) || { nombre: "Desconocido", telefono: "N/A" };
-  const veh = (STATE.db.vehiculos || []).find(v => v.id === ord.vehiculoId) || { marca: "", modelo: "", año: "", color: "", placa: "" };
-  const detalles = (STATE.db.detalleServicios || []).filter(d => d.ordenId === ord.id);
-  const fotos = (STATE.db.fotos || []).filter(f => f.ordenId === ord.id);
+  const cli = (STATE.db.clientes || []).find(c => String(c.id) === String(ord.clienteId)) || { nombre: "Desconocido", telefono: "N/A" };
+  const veh = (STATE.db.vehiculos || []).find(v => String(v.id) === String(ord.vehiculoId)) || { marca: "", modelo: "", año: "", color: "", placa: "" };
+  const detalles = (STATE.db.detalleServicios || []).filter(d => String(d.ordenId) === String(ord.id));
+  const fotos = (STATE.db.fotos || []).filter(f => String(f.ordenId) === String(ord.id));
+
+  const telClean = String(cli.telefono || '').replace(/\D/g, '');
 
   const fotosHtml = fotos.length > 0
     ? fotos.map(f => `
@@ -597,7 +610,7 @@ function renderOrdenDetalle(ordenId) {
           </h3>
           <p><strong>${cli.nombre}</strong></p>
           <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.3rem;"><i class="fas fa-phone"></i> ${cli.telefono}</p>
-          <a href="https://wa.me/${(cli.telefono || '').replace(/\D/g, '')}" target="_blank" class="btn btn-success btn-sm" style="margin-top: 0.8rem; width: 100%;">
+          <a href="https://wa.me/${telClean}" target="_blank" class="btn btn-success btn-sm" style="margin-top: 0.8rem; width: 100%;">
             <i class="fab fa-whatsapp"></i> Contactar WhatsApp
           </a>
         </div>
@@ -609,7 +622,7 @@ function renderOrdenDetalle(ordenId) {
           <p><strong>${veh.marca} ${veh.modelo}</strong> (${veh.año || 'Año N/D'})</p>
           <p style="margin-top: 0.5rem;"><span class="license-plate-tag">${veh.placa || 'SIN PLACA'}</span></p>
           <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;">Color: ${veh.color || 'N/D'}</p>
-          <p style="font-size: 0.85rem; color: var(--text-muted);">Km Entrada: ${ord.kilometrajeEntrada ? ord.kilometrajeEntrada.toLocaleString() + ' km' : 'N/D'}</p>
+          <p style="font-size: 0.85rem; color: var(--text-muted);">Km Entrada: ${ord.kilometrajeEntrada ? Number(ord.kilometrajeEntrada).toLocaleString() + ' km' : 'N/D'}</p>
         </div>
       </div>
 
@@ -681,7 +694,7 @@ function initEventListeners() {
   // Abrir Modal Nueva Orden
   document.querySelectorAll(".btn-open-nueva-orden").forEach(btn => {
     btn.onclick = () => {
-      const clientes = STATE.db.clientes || [];
+      const clientes = STATE.db ? (STATE.db.clientes || []) : [];
       if (clientes.length === 0) {
         UTILS.showToast("Debes registrar un cliente primero antes de crear una orden", "info");
         document.getElementById("modal-nuevo-cliente").classList.remove("hidden");
@@ -745,7 +758,9 @@ function initEventListeners() {
       
       // Actualizar estado local inmediatamente
       if (STATE.db && STATE.db.ordenes) {
-        STATE.db.ordenes.push(creada);
+        if (!STATE.db.ordenes.find(o => o.id === creada.id)) {
+          STATE.db.ordenes.push(creada);
+        }
       }
 
       UTILS.showToast("¡Órden de ingreso creada con éxito!");
@@ -785,7 +800,7 @@ function initEventListeners() {
       // Actualización inmediata en memoria local
       if (STATE.db) {
         if (!STATE.db.clientes) STATE.db.clientes = [];
-        if (!STATE.db.clientes.find(c => c.id === nuevo.id)) {
+        if (!STATE.db.clientes.find(c => String(c.id) === String(nuevo.id))) {
           STATE.db.clientes.push(nuevo);
         }
       }
@@ -816,7 +831,7 @@ function initEventListeners() {
 
   // Modal Nuevo Vehículo Submit
   document.getElementById("btn-modal-nuevo-vehiculo").onclick = () => {
-    const clientes = STATE.db.clientes || [];
+    const clientes = STATE.db ? (STATE.db.clientes || []) : [];
     if (clientes.length === 0) {
       UTILS.showToast("Registra un cliente primero para asignarle un vehículo", "info");
       document.getElementById("modal-nuevo-cliente").classList.remove("hidden");
@@ -848,7 +863,7 @@ function initEventListeners() {
       // Actualización inmediata local
       if (STATE.db) {
         if (!STATE.db.vehiculos) STATE.db.vehiculos = [];
-        if (!STATE.db.vehiculos.find(v => v.id === nuevoVeh.id)) {
+        if (!STATE.db.vehiculos.find(v => String(v.id) === String(nuevoVeh.id))) {
           STATE.db.vehiculos.push(nuevoVeh);
         }
       }
@@ -982,7 +997,6 @@ function actualizarModelosSegunMarca(marcaNombre) {
   if (matchedBrandKey) {
     modelos = CAR_CATALOG[matchedBrandKey];
   } else {
-    // Si la marca es personalizada, ofrecer modelos generales
     Object.values(CAR_CATALOG).forEach(arr => modelos.push(...arr));
   }
 
@@ -1008,7 +1022,7 @@ function poblarSelectVehiculosParaCliente(clienteId) {
     return;
   }
 
-  const vehiculos = STATE.db ? (STATE.db.vehiculos || []).filter(v => v.clienteId === clienteId) : [];
+  const vehiculos = STATE.db ? (STATE.db.vehiculos || []).filter(v => String(v.clienteId) === String(clienteId)) : [];
   if (vehiculos.length === 0) {
     select.innerHTML = `<option value="">-- Este cliente no tiene vehículos registrados --</option>`;
     select.disabled = true;
@@ -1019,7 +1033,6 @@ function poblarSelectVehiculosParaCliente(clienteId) {
     vehiculos.map(v => `<option value="${v.id}">${v.marca} ${v.modelo} ${v.año || ''} (Placa: ${v.placa || 'S/P'})</option>`).join("");
   select.disabled = false;
 
-  // Auto-seleccionar si solo hay 1 vehículo
   if (vehiculos.length === 1) {
     select.value = vehiculos[0].id;
   }
