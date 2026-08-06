@@ -28,11 +28,12 @@ Después de completar la implementación de **cada fase** del plan de implementa
 
 ## 3. Reglas de Diseño y Estética
 
-- **Tema visual**: Dark Navy (`#0b132b`, `#1c2541`) con acentos dorados/naranjas (`#f59e0b`, `#ea580c`), inspirado en la tarjeta de contacto del taller.
-- **Tipografía**: Google Fonts `Inter` (cuerpo) y `Outfit` (encabezados). Nunca usar fuentes genéricas del sistema.
+- **Tema visual**: Esquema Dominico-Profesional con azul primario (`#002D62`), azul secundario (`#0A4A8F`), rojo acento (`#CE1126`), fondo claro (`#F8F9FA`) y texto gris oscuro (`#343A40`).
+- **Tipografía**: Sans para titulares e `Inter` para cuerpo e interfaz (pesos 300, 400, 500, 600, 700). Fallbacks: `Segoe UI`, `Helvetica`, `Arial`.
+- **Cifras tabulares**: Los montos y valores numéricos deben usar `font-variant-numeric: tabular-nums` para alineación de cifras.
 - **Idioma**: 100% en español dominicano. Todos los textos, labels, placeholders, mensajes y tooltips en español.
 - **Moneda**: Siempre mostrar en Peso Dominicano con formato `RD$` usando `Intl.NumberFormat("es-DO")`.
-- **Fechas**: Siempre formatear en español con `toLocaleDateString("es-DO")`.
+- **Fechas**: Siempre formatear en español con `toLocaleString("es-DO")`.
 - **Accesibilidad móvil**: Botones mínimo 44×44px, fuentes legibles (≥14px), formularios con `autocomplete` y `capture` para cámara.
 
 ## 4. Reglas de Estructura del Código
