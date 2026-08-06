@@ -208,6 +208,38 @@ function renderDashboard() {
       </tr>
     `;
   }).join("");
+
+  const mobileContainer = document.getElementById("mobile-dashboard-ordenes");
+  if (mobileContainer) {
+    if (ultimas.length === 0) {
+      mobileContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No hay órdenes registradas.</div>`;
+    } else {
+      mobileContainer.innerHTML = ultimas.map(ord => {
+        const cli = clientes.find(c => String(c.id) === String(ord.clienteId)) || { nombre: "Desconocido" };
+        const veh = vehiculos.find(v => String(v.id) === String(ord.vehiculoId)) || { marca: "", modelo: "", placa: "" };
+        return `
+          <div class="mobile-card-item">
+            <div class="mobile-card-header">
+              <div>
+                <strong>${ord.id}</strong>
+                <div style="font-size: 0.78rem; color: var(--text-muted);">${UTILS.formatDate(ord.fechaIngreso)}</div>
+              </div>
+              ${UTILS.getStatusBadgeHtml(ord.estado)}
+            </div>
+            <div class="mobile-card-body">
+              <div><span class="card-label">Cliente:</span> ${cli.nombre}</div>
+              <div><span class="card-label">Vehículo:</span> ${veh.marca} ${veh.modelo}</div>
+              <div><span class="card-label">Placa:</span> <span class="license-plate-tag">${veh.placa || 'S/P'}</span></div>
+            </div>
+            <div class="mobile-card-footer">
+              <span class="money">${UTILS.formatMoney(ord.montoTotal)}</span>
+              <a href="#orden-detalle/${ord.id}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i> Ver Detalle</a>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+  }
 }
 
 // BÚSQUEDA GLOBAL UNIFICADA (DASHBOARD)
@@ -345,6 +377,38 @@ function renderListaOrdenes() {
       </tr>
     `;
   }).join("");
+
+  const mobileContainer = document.getElementById("mobile-lista-ordenes");
+  if (mobileContainer) {
+    if (filtradas.length === 0) {
+      mobileContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No se encontraron órdenes.</div>`;
+    } else {
+      mobileContainer.innerHTML = [...filtradas].reverse().map(ord => {
+        const cli = clientes.find(c => String(c.id) === String(ord.clienteId)) || { nombre: "N/A" };
+        const veh = vehiculos.find(v => String(v.id) === String(ord.vehiculoId)) || { marca: "", modelo: "", placa: "" };
+        return `
+          <div class="mobile-card-item">
+            <div class="mobile-card-header">
+              <div>
+                <strong>${ord.id}</strong>
+                <div style="font-size: 0.78rem; color: var(--text-muted);">${UTILS.formatDate(ord.fechaIngreso, true)}</div>
+              </div>
+              ${UTILS.getStatusBadgeHtml(ord.estado)}
+            </div>
+            <div class="mobile-card-body">
+              <div><span class="card-label">Cliente:</span> ${cli.nombre}</div>
+              <div><span class="card-label">Vehículo:</span> ${veh.marca} ${veh.modelo} ${veh.año || ''}</div>
+              <div><span class="card-label">Placa:</span> <span class="license-plate-tag">${veh.placa || 'S/P'}</span></div>
+            </div>
+            <div class="mobile-card-footer">
+              <span class="money">${UTILS.formatMoney(ord.montoTotal)}</span>
+              <a href="#orden-detalle/${ord.id}" class="btn btn-secondary btn-sm"><i class="fas fa-folder-open"></i> Abrir</a>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+  }
 }
 
 // -------------------------------------------------------------
@@ -399,6 +463,39 @@ function renderListaClientes() {
       </tr>
     `;
   }).join("");
+
+  const mobileContainer = document.getElementById("mobile-lista-clientes");
+  if (mobileContainer) {
+    if (filtrados.length === 0) {
+      mobileContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No hay clientes registrados.</div>`;
+    } else {
+      mobileContainer.innerHTML = filtrados.map(c => {
+        const vehs = vehiculos.filter(v => String(v.clienteId) === String(c.id));
+        const listaVehsHtml = vehs.length > 0 
+          ? vehs.map(v => `<span class="badge badge-process" style="margin-right: 0.3rem;">${v.marca} ${v.modelo} (${v.placa || 'S/P'})</span>`).join(" ")
+          : `<span style="color: var(--text-muted); font-size: 0.8rem;">Sin vehículos</span>`;
+        const telClean = String(c.telefono || '').replace(/\D/g, '');
+
+        return `
+          <div class="mobile-card-item">
+            <div class="mobile-card-header">
+              <strong>${c.nombre}</strong>
+              <span class="badge badge-pending">${c.id}</span>
+            </div>
+            <div class="mobile-card-body" style="grid-template-columns: 1fr;">
+              <div><span class="card-label">Teléfono:</span> <a href="https://wa.me/${telClean}" target="_blank" style="color: #10B981; font-weight: 600;"><i class="fab fa-whatsapp"></i> ${c.telefono}</a></div>
+              ${c.cedula ? `<div><span class="card-label">Cédula:</span> ${c.cedula}</div>` : ''}
+              <div><span class="card-label">Vehículos:</span> ${listaVehsHtml}</div>
+            </div>
+            <div class="mobile-card-footer">
+              <span style="font-size: 0.78rem; color: var(--text-muted);">Registro: ${UTILS.formatDate(c.fechaRegistro)}</span>
+              <button class="btn btn-secondary btn-sm" onclick="abrirModalNuevoVehiculoParaCliente('${c.id}')"><i class="fas fa-plus"></i> Añadir Vehículo</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+  }
 }
 
 // -------------------------------------------------------------
@@ -451,6 +548,37 @@ function renderListaVehiculos() {
       </tr>
     `;
   }).join("");
+
+  const mobileContainer = document.getElementById("mobile-lista-vehiculos");
+  if (mobileContainer) {
+    if (filtrados.length === 0) {
+      mobileContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No hay vehículos registrados.</div>`;
+    } else {
+      mobileContainer.innerHTML = filtrados.map(v => {
+        const cli = clientes.find(c => String(c.id) === String(v.clienteId)) || { nombre: "N/A" };
+        const historialOrdenes = ordenes.filter(o => String(o.vehiculoId) === String(v.id));
+
+        return `
+          <div class="mobile-card-item">
+            <div class="mobile-card-header">
+              <div>
+                <strong>${v.marca} ${v.modelo} ${v.año ? '(' + v.año + ')' : ''}</strong>
+                <div style="margin-top: 0.2rem;"><span class="license-plate-tag">${v.placa || 'SIN PLACA'}</span></div>
+              </div>
+              <span class="badge badge-pending">${historialOrdenes.length} visita(s)</span>
+            </div>
+            <div class="mobile-card-body">
+              <div><span class="card-label">Propietario:</span> ${cli.nombre}</div>
+              <div><span class="card-label">Color:</span> ${v.color || 'N/D'}</div>
+            </div>
+            <div class="mobile-card-footer">
+              <button class="btn btn-secondary btn-sm" style="width: 100%;" onclick="verHistorialVehiculo('${v.id}')"><i class="fas fa-history"></i> Ver Historial</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+  }
 }
 
 function verHistorialVehiculo(vehiculoId) {

@@ -45,7 +45,7 @@ const PRINT_MODULE = {
     `;
 
     return `
-      <div id="printable-receipt" class="receipt-paper">
+      <div id="printable-receipt" class="receipt-paper print-compact">
 
         <!-- ENCABEZADO CORPORATIVO -->
         <div class="receipt-header">
@@ -103,7 +103,7 @@ const PRINT_MODULE = {
         <div class="receipt-section">
           <h4><i class="fas fa-wrench"></i> MOTIVO DE INGRESO & DIAGNÓSTICO TÉCNICO</h4>
           <div class="receipt-text-box">
-            <p><strong>Síntomas reportedos:</strong> ${ord.motivoVisita || 'Mantenimiento preventivo / Diagnóstico general'}</p>
+            <p><strong>Síntomas reportados:</strong> ${ord.motivoVisita || 'Mantenimiento preventivo / Diagnóstico general'}</p>
             ${ord.diagnostico ? `<p style="margin-top: 0.4rem; color: #0A4A8F;"><strong>Diagnóstico Técnico:</strong> ${ord.diagnostico}</p>` : ''}
           </div>
         </div>
@@ -159,13 +159,13 @@ const PRINT_MODULE = {
         <div class="receipt-signatures">
           <div class="sig-line">
             <div class="sig-border"></div>
-            <p style="font-size: 0.8rem; font-weight: 600;">Pablo Rosario</p>
-            <p style="font-size: 0.75rem; color: #64748b;">Administrador — Taller El Varón</p>
+            <p class="sig-name">Pablo Rosario</p>
+            <p class="sig-title">Administrador — Taller El Varón</p>
           </div>
           <div class="sig-line">
             <div class="sig-border"></div>
-            <p style="font-size: 0.8rem; font-weight: 600;">Firma del Cliente</p>
-            <p style="font-size: 0.75rem; color: #64748b;">Conforme con Trabajo Recibido</p>
+            <p class="sig-name">Firma del Cliente</p>
+            <p class="sig-title">Conforme con Trabajo Recibido</p>
           </div>
         </div>
 

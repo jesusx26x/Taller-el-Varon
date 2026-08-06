@@ -10,6 +10,7 @@
   <link rel="icon" type="image/png" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
   <meta name="theme-color" content="#002D62">
+  <meta name="description" content="Sistema de gestión de taller mecánico Taller El Varón — Pablo Rosario. Órdenes de trabajo, clientes, vehículos y constancias.">
 </head>
 <body>
 
@@ -62,10 +63,10 @@
 
       <nav>
         <ul class="nav-links">
-          <li><a href="#dashboard" class="nav-btn active" id="nav-dashboard"><i class="fas fa-chart-line"></i> Dashboard</a></li>
-          <li><a href="#ordenes" class="nav-btn" id="nav-ordenes"><i class="fas fa-file-invoice-dollar"></i> Órdenes</a></li>
-          <li><a href="#clientes" class="nav-btn" id="nav-clientes"><i class="fas fa-users"></i> Clientes</a></li>
-          <li><a href="#vehiculos" class="nav-btn" id="nav-vehiculos"><i class="fas fa-car"></i> Vehículos</a></li>
+          <li><a href="#dashboard" class="nav-btn active" id="nav-dashboard"><i class="fas fa-chart-line" aria-hidden="true"></i> <span class="nav-label">Dashboard</span></a></li>
+          <li><a href="#ordenes" class="nav-btn" id="nav-ordenes"><i class="fas fa-file-invoice-dollar" aria-hidden="true"></i> <span class="nav-label">Órdenes</span></a></li>
+          <li><a href="#clientes" class="nav-btn" id="nav-clientes"><i class="fas fa-users" aria-hidden="true"></i> <span class="nav-label">Clientes</span></a></li>
+          <li><a href="#vehiculos" class="nav-btn" id="nav-vehiculos"><i class="fas fa-car" aria-hidden="true"></i> <span class="nav-label">Vehículos</span></a></li>
         </ul>
       </nav>
 
@@ -76,7 +77,7 @@
         <div class="user-badge">
           <i class="fas fa-user-circle"></i> Pablo Rosario
         </div>
-        <button id="btn-logout" class="btn btn-secondary btn-sm" title="Cerrar sesión" style="color: #ffffff; background: rgba(255,255,255,0.15);">
+        <button id="btn-logout" class="btn btn-sm btn-logout" title="Cerrar sesión" aria-label="Cerrar sesión">
           <i class="fas fa-power-off"></i>
         </button>
       </div>
@@ -89,15 +90,15 @@
       <section id="view-dashboard" class="view-section active-view">
         
         <!-- BANNER DE BIENVENIDA GUÍA PARA PABLO -->
-        <div id="welcome-banner" style="background: linear-gradient(135deg, #002D62, #0A4A8F); color: white; padding: 1.25rem 1.5rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow-card);">
-          <div style="display: flex; align-items: center; gap: 1rem;">
-            <div style="font-size: 2rem; color: #FFEC00;"><i class="fas fa-hand-wave"></i></div>
+        <div id="welcome-banner" class="welcome-banner">
+          <div class="welcome-banner-content">
+            <div class="welcome-banner-icon"><i class="fas fa-hand-wave" aria-hidden="true"></i></div>
             <div>
-              <h3 style="color: white; font-size: 1.1rem; margin-bottom: 0.2rem;">¡Bienvenido, Pablo Rosario!</h3>
-              <p style="font-size: 0.88rem; color: #E2E8F0;">Para registrar la entrada de un vehículo, presiona el botón <strong>"+ NUEVO INGRESO DE VEHÍCULO"</strong>. Todo quedará guardado automáticamente en tu Google Sheet.</p>
+              <h3>¡Bienvenido, Pablo Rosario!</h3>
+              <p>Para registrar la entrada de un vehículo, presiona el botón <strong>"+ NUEVO INGRESO DE VEHÍCULO"</strong>. Todo quedará guardado automáticamente en tu Google Sheet.</p>
             </div>
           </div>
-          <button id="btn-close-welcome" class="btn btn-secondary btn-sm" style="background: rgba(255,255,255,0.2); color: white; border: none;"><i class="fas fa-times"></i> Entendido</button>
+          <button id="btn-close-welcome" class="btn btn-secondary btn-sm" style="background: rgba(255,255,255,0.2); color: white; border: none;"><i class="fas fa-times" aria-hidden="true"></i> Entendido</button>
         </div>
 
         <div class="action-bar">
@@ -113,7 +114,7 @@
         <!-- BÚSQUEDA GLOBAL UNIFICADA -->
         <div class="search-box" style="margin-bottom: 1.5rem;">
           <i class="fas fa-search"></i>
-          <input type="text" id="global-search-input" class="search-input" placeholder="🔍 Búsqueda rápida global: escribe nombre, teléfono, cédula, placa, vehículo o N° de orden...">
+          <input type="text" id="global-search-input" class="search-input" placeholder="🔍 Búsqueda rápida global: escribe nombre, teléfono, cédula, placa, vehículo o N° de orden..." aria-label="Búsqueda global por nombre, teléfono, placa o número de orden">
         </div>
         <div id="global-search-results" style="margin-bottom: 1.5rem; display: none;"></div>
 
@@ -136,7 +137,7 @@
           </div>
 
           <div class="stat-card">
-            <div class="stat-icon green"><i class="fas fa-coins"></i></div>
+            <div class="stat-icon red"><i class="fas fa-coins"></i></div>
             <div class="stat-info">
               <h4>Cobrado Hoy</h4>
               <div class="value money" id="stat-cobrado-hoy">RD$ 0.00</div>
@@ -177,6 +178,9 @@
               </tbody>
             </table>
           </div>
+        <div id="mobile-dashboard-ordenes" class="mobile-card-list">
+          <!-- Filled by JS -->
+        </div>
         </div>
       </section>
 
@@ -329,11 +333,11 @@
   </div>
 
   <!-- MODAL: NUEVO INGRESO / NUEVA ÓRDEN -->
-  <div id="modal-nueva-orden" class="modal-overlay hidden">
+  <div id="modal-nueva-orden" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-container">
       <div class="modal-header">
         <h3><i class="fas fa-plus-circle" style="color: var(--color-accent-red);"></i> Registro de Nuevo Ingreso de Vehículo</h3>
-        <button class="close-btn modal-close">&times;</button>
+        <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
       </div>
 
       <form id="form-nueva-orden">
@@ -383,11 +387,11 @@
   </div>
 
   <!-- MODAL: NUEVO CLIENTE -->
-  <div id="modal-nuevo-cliente" class="modal-overlay hidden">
+  <div id="modal-nuevo-cliente" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-container">
       <div class="modal-header">
         <h3><i class="fas fa-user-plus" style="color: var(--color-primary);"></i> Registrar Nuevo Cliente</h3>
-        <button class="close-btn modal-close">&times;</button>
+        <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
       </div>
 
       <form id="form-nuevo-cliente">
@@ -427,11 +431,11 @@
   </div>
 
   <!-- MODAL: NUEVO VEHÍCULO -->
-  <div id="modal-nuevo-vehiculo" class="modal-overlay hidden">
+  <div id="modal-nuevo-vehiculo" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-container">
       <div class="modal-header">
         <h3><i class="fas fa-car" style="color: var(--color-primary);"></i> Registrar Nuevo Vehículo</h3>
-        <button class="close-btn modal-close">&times;</button>
+        <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
       </div>
 
       <form id="form-nuevo-vehiculo">
@@ -532,11 +536,11 @@
   </div>
 
   <!-- MODAL: AGREGAR ITEM A ÓRDEN -->
-  <div id="modal-agregar-item" class="modal-overlay hidden">
+  <div id="modal-agregar-item" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-container">
       <div class="modal-header">
         <h3><i class="fas fa-plus-circle"></i> Agregar Servicio o Repuesto a la Órden</h3>
-        <button class="close-btn modal-close">&times;</button>
+        <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
       </div>
 
       <form id="form-agregar-item">
@@ -575,11 +579,11 @@
   </div>
 
   <!-- MODAL: SUBIR FOTO EVIDENCIA -->
-  <div id="modal-subir-foto" class="modal-overlay hidden">
+  <div id="modal-subir-foto" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-container">
       <div class="modal-header">
         <h3><i class="fas fa-camera"></i> Subir Foto de Evidencia</h3>
-        <button class="close-btn modal-close">&times;</button>
+        <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
       </div>
 
       <form id="form-subir-foto">
@@ -609,13 +613,13 @@
   </div>
 
   <!-- MODAL: IMPRESIÓN DE CONSTANCIA -->
-  <div id="print-modal" class="modal-overlay hidden">
+  <div id="print-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-container" style="max-width: 850px;">
       <div class="modal-header no-print">
         <h3><i class="fas fa-print"></i> Vista Previa de Constancia Imprimible</h3>
         <div>
           <button class="btn btn-primary btn-sm" onclick="window.print()"><i class="fas fa-print"></i> IMPRIMIR AHORA</button>
-          <button class="close-btn modal-close">&times;</button>
+          <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
         </div>
       </div>
 
