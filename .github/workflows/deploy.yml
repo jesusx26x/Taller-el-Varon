@@ -1,5 +1,4 @@
 name: Despliegue Ultrarrápido a GitHub Pages
-# Configurado para ejecución directa de 15 segundos mediante GitHub Actions (Settings -> Pages -> Source = GitHub Actions)
 
 on:
   push:
@@ -21,7 +20,12 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     timeout-minutes: 5
+
     steps:
       - name: Descargar Código
         uses: actions/checkout@v4
@@ -34,9 +38,6 @@ jobs:
         with:
           path: '.'
 
-      - name: Desplegar a GitHub Pages Instantáneo
+      - name: Desplegar a GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          timeout: 120000
-
