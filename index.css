@@ -1649,3 +1649,93 @@ a {
 }
 
 
+
+/* =========================================================================
+ * FASE B — Diseño premium (aditivo): elevación, easing, micro-interacciones,
+ * transiciones de vista, skeletons, degradados sutiles y accesibilidad.
+ * ========================================================================= */
+:root {
+  --shadow-1: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.10);
+  --shadow-2: 0 4px 8px -2px rgba(16,24,40,.10), 0 2px 4px -2px rgba(16,24,40,.06);
+  --shadow-3: 0 12px 16px -4px rgba(16,24,40,.10), 0 4px 6px -2px rgba(16,24,40,.05);
+  --shadow-4: 0 20px 24px -4px rgba(16,24,40,.12), 0 8px 8px -4px rgba(16,24,40,.06);
+  --ease-out: cubic-bezier(.22,.61,.36,1);
+  --ease-emphasis: cubic-bezier(.2,.8,.2,1);
+  --dur-fast: .16s;
+  --dur-med: .28s;
+  --ring: 0 0 0 3px rgba(10,74,143,.35);
+  --grad-hero: linear-gradient(135deg, #002D62 0%, #0A4A8F 55%, #061B3A 100%);
+  --grad-red: linear-gradient(135deg, #CE1126 0%, #A70D1E 100%);
+}
+
+/* Tipografía fluida en el titular de marca */
+.app-header .brand-info h1 { font-size: clamp(1.05rem, 0.95rem + 0.7vw, 1.5rem); letter-spacing: .2px; }
+
+/* Foco visible accesible (teclado) */
+a:focus-visible, button:focus-visible, .btn:focus-visible,
+input:focus-visible, select:focus-visible, textarea:focus-visible,
+.nav-btn:focus-visible, .status-step-item:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: var(--radius-sm);
+}
+
+/* Header con degradado "hero" (texto ya es claro: contraste seguro) */
+.app-header { background: var(--grad-hero); box-shadow: var(--shadow-3); }
+
+/* Botones: micro-interacciones (hover eleva, active presiona) */
+.btn {
+  transition: transform var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-med) var(--ease-out),
+              background-color var(--dur-fast) var(--ease-out),
+              filter var(--dur-fast) var(--ease-out);
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(.985); }
+.btn-primary { background: var(--grad-red); box-shadow: var(--shadow-2); }
+.btn-primary:hover { box-shadow: var(--shadow-3); filter: brightness(1.05); }
+.btn-secondary:hover { box-shadow: var(--shadow-2); }
+
+/* Tarjetas: elevación y realce al pasar el cursor */
+.stat-card, .mobile-card-item {
+  box-shadow: var(--shadow-1);
+  transition: transform var(--dur-med) var(--ease-out), box-shadow var(--dur-med) var(--ease-out);
+}
+.stat-card:hover, .mobile-card-item:hover { transform: translateY(-3px); box-shadow: var(--shadow-3); }
+
+/* Tablas y badges: transiciones suaves */
+.data-table tbody tr { transition: background-color var(--dur-fast) var(--ease-out); }
+.badge { transition: background-color var(--dur-med) var(--ease-out), color var(--dur-med) var(--ease-out); }
+
+/* Indicador de sincronización (clickable) */
+#cloud-status-badge { transition: transform var(--dur-fast) var(--ease-out); }
+#cloud-status-badge:hover { transform: translateY(-1px); }
+
+/* Transición al cambiar de vista + aparición suave */
+.view-section.active-view { animation: viewIn var(--dur-med) var(--ease-out) both; }
+@keyframes viewIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Modales: entrada con énfasis */
+.modal-overlay:not(.hidden) .modal-container { animation: modalIn var(--dur-med) var(--ease-emphasis) both; }
+@keyframes modalIn { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* Skeleton loaders (para estados de carga sin datos locales) */
+.skeleton { position: relative; overflow: hidden; background: #E9ECEF; border-radius: var(--radius-sm); }
+.skeleton::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent);
+  animation: shimmer 1.2s infinite;
+}
+.skeleton-line { height: 12px; margin: .45rem 0; }
+.skeleton-card { height: 96px; border-radius: var(--radius-md); margin: .5rem 0; }
+@keyframes shimmer { to { transform: translateX(100%); } }
+
+/* Accesibilidad: respetar "reducir movimiento" */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

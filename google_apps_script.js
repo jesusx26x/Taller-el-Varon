@@ -79,7 +79,7 @@ function handleRequest(e, method) {
 
     switch (action) {
       case "obtenerTodo":
-        result = obtenerTodoElSistema();
+        result = obtenerTodoElSistema(data.desde);
         break;
 
       case "crearCliente":
@@ -121,6 +121,10 @@ function handleRequest(e, method) {
 
       case "eliminarRegistro":
         result = eliminarRegistro(data.tabla, data.id);
+        break;
+
+      case "batch":
+        result = procesarLote(params.ops);
         break;
 
       default:
@@ -165,6 +169,48 @@ function marcarProcesado(opId) {
   catch (e) { /* sin PropertiesService */ }
 }
 function _esBorrado(v) { return v === true || String(v).toLowerCase() === "true"; }
+
+// Despachador reutilizable de acciones de escritura (usado por el endpoint batch).
+function ejecutarAccion(action, data) {
+  switch (action) {
+    case "crearCliente": return crearRegistro("Clientes", data, "CLI");
+    case "actualizarCliente": return actualizarRegistro("Clientes", data);
+    case "crearVehiculo": return crearRegistro("Vehiculos", data, "VEH");
+    case "actualizarVehiculo": return actualizarRegistro("Vehiculos", data);
+    case "crearOrden": return crearOrdenCompleta(data);
+    case "actualizarEstadoOrden": return actualizarEstadoOrden(data.ordenId, data.nuevoEstado, data.fechaEntrega);
+    case "agregarServicioAOrden": return agregarServicioAOrden(data);
+    case "editarServicioDetalle": return editarServicioDetalle(data);
+    case "eliminarServicioDetalle": return eliminarServicioDetalle(data);
+    case "eliminarOrden": return eliminarOrdenCascada(data.ordenId);
+    case "subirFoto": return subirFotoDrive(data);
+    case "eliminarRegistro": return eliminarRegistro(data.tabla, data.id);
+    default: throw new Error("Acción no reconocida: " + action);
+  }
+}
+
+// FASE C: procesa TODA la cola en una sola petición (menos viajes de red).
+// Idempotente por opId; devuelve un resultado por operación.
+function procesarLote(ops) {
+  const lock = LockService.getScriptLock();
+  lock.tryLock(30000);
+  try {
+    const resultados = [];
+    (ops || []).forEach(function (op) {
+      try {
+        if (op.opId && yaProcesado(op.opId)) { resultados.push({ opId: op.opId, status: "success", idempotent: true }); return; }
+        const r = ejecutarAccion(op.action, op.data || {});
+        if (op.opId) marcarProcesado(op.opId);
+        resultados.push({ opId: op.opId, status: "success", data: r });
+      } catch (e) {
+        resultados.push({ opId: op.opId, status: "error", message: String(e) });
+      }
+    });
+    return resultados;
+  } finally {
+    lock.releaseLock();
+  }
+}
 
 // Borrado por id: LÓGICO si existe la columna 'deleted'; si no, físico (compatibilidad).
 function borrarPorId(sheet, id) {
@@ -211,13 +257,17 @@ function borrarPorColumna(sheet, colIndex1based, valor) {
   return n;
 }
 
-function obtenerTodoElSistema() {
+function obtenerTodoElSistema(desde) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const safeRead = function(name) {
     try {
-      const sheet = getSheetTolerant(ss, name);
-      return sheetToObjects(sheet);
+      let objs = sheetToObjects(getSheetTolerant(ss, name));
+      if (desde) {
+        // Delta: solo filas cambiadas desde 'desde'. Filas sin updatedAt siempre se incluyen.
+        objs = objs.filter(function (o) { return !o.updatedAt || String(o.updatedAt) > String(desde); });
+      }
+      return objs;
     } catch (e) {
       console.error("Error leyendo pestaña " + name + ": " + e.toString());
       return [];
@@ -229,7 +279,8 @@ function obtenerTodoElSistema() {
     vehiculos: safeRead("Vehiculos"),
     ordenes: safeRead("Ordenes"),
     detalleServicios: safeRead("DetalleServicios"),
-    fotos: safeRead("Fotos")
+    fotos: safeRead("Fotos"),
+    delta: !!desde
   };
 }
 

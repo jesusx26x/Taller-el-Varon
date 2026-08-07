@@ -60,14 +60,24 @@ const API = {
     if (API.isCloudMode() && (typeof navigator === "undefined" || navigator.onLine)) {
       try {
         await SYNC.flush();
-        const json = await SYNC.post("obtenerTodo", {});
+        const desde = STORE.getSince();
+        const json = await SYNC.post("obtenerTodo", { data: { desde: desde } });
         if (json.status === "success" && json.data) {
-          const merged = STORE.sanitizeDb(json.data);
-          STORE.outbox().forEach(op => { try { STORE.applyOp(merged, op); } catch (e) { } });
-          STORE.setMem(merged);
+          if (json.data.delta && desde) {
+            // Descarga incremental: solo filas cambiadas -> upsert en MEM.
+            STORE.mergeDelta(json.data);
+          } else {
+            // Descarga completa (primera vez o backend sin delta): reemplaza MEM.
+            STORE.setMem(STORE.sanitizeDb(json.data));
+          }
+          // Reaplica la cola local encima (lo pendiente siempre gana).
+          STORE.outbox().forEach(op => { try { STORE.applyOp(STORE.memDb(), op); } catch (e) { } });
+          // Avanza la marca de última sync con el máximo updatedAt del servidor.
+          const mx = STORE.maxUpdatedAt(json.data);
+          if (mx) STORE.setSince(mx);
           STORE.persist();
           SYNC.emit();
-          return STORE.visibleDb(merged);
+          return STORE.visibleDb(STORE.memDb());
         }
       } catch (err) { console.warn("No se pudo sincronizar con la nube. Datos locales:", err); }
     }

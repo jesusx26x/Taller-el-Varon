@@ -11,6 +11,7 @@ const CONFIG = {
   USER_KEY: "taller_user_info",
   LOCAL_DB_KEY: "taller_el_varon_db_v1",
   OUTBOX_KEY: "taller_el_varon_outbox_v1",
+  SINCE_KEY: "taller_el_varon_since_v1",
   IDB_NAME: "taller_el_varon",
   IDB_VERSION: 1
 };
@@ -191,8 +192,27 @@ function visibleDb(db) {
   };
 }
 
+// FASE C: sincronización incremental (delta por updatedAt).
+function getSince() { try { return localStorage.getItem(CONFIG.SINCE_KEY) || ""; } catch (e) { return ""; } }
+function setSince(v) { try { if (v) localStorage.setItem(CONFIG.SINCE_KEY, String(v)); } catch (e) {} }
+function maxUpdatedAt(data) {
+  let mx = "";
+  ["clientes", "vehiculos", "ordenes", "detalleServicios", "fotos"].forEach(k => {
+    (data[k] || []).forEach(r => { const u = r && r.updatedAt ? String(r.updatedAt) : ""; if (u > mx) mx = u; });
+  });
+  return mx;
+}
+// Fusiona filas cambiadas (delta) del servidor dentro de MEM (upsert por id; respeta tombstones).
+function mergeDelta(data) {
+  const db = memDb();
+  const map = { clientes: "clientes", vehiculos: "vehiculos", ordenes: "ordenes", detalleServicios: "detalleServicios", fotos: "fotos" };
+  Object.keys(map).forEach(k => { (data[k] || []).forEach(row => { if (row && row.id !== undefined) upsertArr(db[k], row); }); });
+  return db;
+}
+
 const STORE = {
   CONFIG, ready: ensureReady, memDb, outbox, setMem, persist, applyOp, stamp,
-  visibleDb, sanitizeDb, recalcTotal, eq, nowISO, uid, folioOrden
+  visibleDb, sanitizeDb, recalcTotal, eq, nowISO, uid, folioOrden,
+  getSince, setSince, maxUpdatedAt, mergeDelta, upsertArr
 };
 if (typeof window !== "undefined") window.STORE = STORE;

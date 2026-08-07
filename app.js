@@ -75,11 +75,11 @@ function actualizarBadgeSync(detail) {
     title = "Hay cambios pendientes de subir. Toca para sincronizar ahora.";
   } else {
     html = '<i class="fas fa-wifi" style="color:#10B981;"></i> Nube sincronizada';
-    title = "Todo sincronizado. Toca para volver a sincronizar.";
+    title = "Todo sincronizado" + (d.ms ? " · última sync " + d.ms + " ms" : "") + ". Toca para volver a sincronizar.";
   }
   badge.innerHTML = html;
   badge.title = title;
-  badge.onclick = () => { if (window.API && API.sync) { API.sync(); cargarDatosYRenderizar(); } };
+  badge.onclick = () => { if (window.API && API.sync) { API.sync(); reconciliarPronto(0); } };
 }
 
 let _primeraCarga = true;
@@ -101,19 +101,42 @@ function mostrarCargando(v) {
   }
 }
 
+// FASE A: pinta al instante desde el estado local (sin esperar la red).
+function pintarLocal() {
+  try { STATE.db = API.getLocalStore(); renderCurrentView(); } catch (e) { /* noop */ }
+}
+
+// FASE A: reconciliación con la nube en segundo plano (no bloquea la UI). Con debounce.
+let _reconcileTimer = null;
+function reconciliarPronto(delay) {
+  clearTimeout(_reconcileTimer);
+  _reconcileTimer = setTimeout(async () => {
+    try { STATE.db = await API.obtenerTodo(); renderCurrentView(); }
+    catch (e) { /* sin conexión: se conserva lo local */ }
+  }, delay === undefined ? 700 : delay);
+}
+
+// FASE A: tras una escritura, refresca al instante desde local y sincroniza en segundo plano.
+function trasEscritura() {
+  pintarLocal();
+  reconciliarPronto();
+}
+
 async function cargarDatosYRenderizar() {
   const first = _primeraCarga;
-  if (first) mostrarCargando(true);
+  // 1) Pinta al instante desde el caché local si hay datos (percepción de velocidad).
+  const local = API.getLocalStore();
+  const hayLocal = local && ((local.clientes && local.clientes.length) || (local.ordenes && local.ordenes.length) || (local.vehiculos && local.vehiculos.length));
+  if (hayLocal) { STATE.db = local; renderCurrentView(); }
+  else if (first) mostrarCargando(true);
+  // 2) Reconcilia con la nube en segundo plano (la UI ya está pintada).
   try {
     STATE.db = await API.obtenerTodo();
-    if (!STATE.db) {
-      STATE.db = { clientes: [], vehiculos: [], ordenes: [], detalleServicios: [], fotos: [] };
-    }
+    if (!STATE.db) STATE.db = { clientes: [], vehiculos: [], ordenes: [], detalleServicios: [], fotos: [] };
     renderCurrentView();
   } catch (err) {
     console.error("Error al cargar datos:", err);
-    STATE.db = API.getLocalStore();
-    renderCurrentView();
+    if (!STATE.db) { STATE.db = API.getLocalStore(); renderCurrentView(); }
   } finally {
     if (first) { mostrarCargando(false); _primeraCarga = false; }
   }
@@ -919,7 +942,7 @@ async function cambiarEstadoOrden(ordenId, nuevoEstado) {
   try {
     await API.actualizarEstadoOrden(ordenId, nuevoEstado);
     UTILS.showToast(`Estado actualizado a: ${nuevoEstado}`);
-    await cargarDatosYRenderizar();
+    trasEscritura();
   } catch (err) {
     UTILS.showToast("Error al actualizar estado", "error");
   }
@@ -1068,7 +1091,7 @@ function initEventListeners() {
       UTILS.showToast("¡Orden de ingreso creada con éxito!");
       document.getElementById("modal-nueva-orden").classList.add("hidden");
       document.getElementById("form-nueva-orden").reset();
-      await cargarDatosYRenderizar();
+      trasEscritura();
       window.location.hash = `#orden-detalle/${creada.id}`;
     } catch (err) {
       UTILS.showToast("Error al crear la orden", "error");
@@ -1130,8 +1153,8 @@ function initEventListeners() {
       if (selectOrdenCli) selectOrdenCli.value = nuevo.id;
       poblarSelectVehiculosParaCliente(nuevo.id);
 
-      // Sincronización completa en background
-      cargarDatosYRenderizar();
+      // Sincronización en segundo plano (no bloquea)
+      trasEscritura();
     } catch (err) {
       UTILS.showToast("Error al guardar cliente", "error");
     } finally {
@@ -1197,7 +1220,7 @@ function initEventListeners() {
       const selectVehOrden = document.getElementById("select-orden-vehiculo");
       if (selectVehOrden) selectVehOrden.value = nuevoVeh.id;
 
-      cargarDatosYRenderizar();
+      trasEscritura();
     } catch (err) {
       UTILS.showToast("Error al guardar vehículo", "error");
     } finally {
@@ -1229,7 +1252,7 @@ function initEventListeners() {
       }
       document.getElementById("modal-agregar-item").classList.add("hidden");
       document.getElementById("form-agregar-item").reset();
-      await cargarDatosYRenderizar();
+      trasEscritura();
     } catch (err) {
       UTILS.showToast("Error al agregar ítem", "error");
     } finally {
@@ -1275,7 +1298,7 @@ function initEventListeners() {
       document.getElementById("modal-subir-foto").classList.add("hidden");
       document.getElementById("form-subir-foto").reset();
       document.getElementById("foto-preview-container").style.display = "none";
-      await cargarDatosYRenderizar();
+      trasEscritura();
     } catch (err) {
       UTILS.showToast("Error al subir foto", "error");
     } finally {
@@ -1508,7 +1531,7 @@ async function eliminarClienteUI(id) {
   try {
     await API.eliminarCliente(id);
     UTILS.showToast("Cliente eliminado");
-    await cargarDatosYRenderizar();
+    trasEscritura();
   } catch (e) { UTILS.showToast("Error al eliminar cliente", "error"); }
 }
 
@@ -1532,7 +1555,7 @@ async function eliminarVehiculoUI(id) {
   try {
     await API.eliminarVehiculo(id);
     UTILS.showToast("Vehículo eliminado");
-    await cargarDatosYRenderizar();
+    trasEscritura();
   } catch (e) { UTILS.showToast("Error al eliminar vehículo", "error"); }
 }
 
@@ -1546,7 +1569,7 @@ async function eliminarItemUI(ordenId, detalleId) {
   try {
     await API.eliminarServicio(ordenId, detalleId);
     UTILS.showToast("Ítem eliminado");
-    await cargarDatosYRenderizar();
+    trasEscritura();
   } catch (e) { UTILS.showToast("Error al eliminar ítem", "error"); }
 }
 
@@ -1562,6 +1585,6 @@ async function eliminarOrdenUI(ordenId) {
     UTILS.showToast("Orden eliminada");
     STATE.filterVehiculoId = null;
     window.location.hash = "ordenes";
-    await cargarDatosYRenderizar();
+    trasEscritura();
   } catch (e) { UTILS.showToast("Error al eliminar la orden", "error"); }
 }
