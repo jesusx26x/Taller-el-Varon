@@ -207,8 +207,75 @@ const UTILS = {
       };
       reader.onerror = (err) => reject(err);
     });
-  }
+  },
+
+  /**
+   * Obtener URL limpia y segura para mostrar imagen en <img> o thumbnail de Drive
+   */
+  getFotoDisplayUrl: (fotoOrUrl) => {
+    if (!fotoOrUrl) return "";
+    let url = typeof fotoOrUrl === "object" ? (fotoOrUrl.url || fotoOrUrl.base64 || "") : String(fotoOrUrl);
+    let driveId = typeof fotoOrUrl === "object" ? fotoOrUrl.driveFileId : null;
+
+    if (url.startsWith("data:image/")) return url;
+
+    if (!driveId && url.includes("drive.google.com")) {
+      const match = url.match(/[?&]id=([^&]+)/) || url.match(/\/d\/([^/]+)/);
+      if (match) driveId = match[1];
+    }
+
+    if (driveId) {
+      return `https://drive.google.com/thumbnail?id=${driveId}&sz=w1000`;
+    }
+    return url;
+  },
+
+  /**
+   * Abrir foto en pestaña nueva de forma segura (evita bloqueo de data: URL en Chrome y redirecciones en Drive)
+   */
+  openFotoInNewTab: (fotoOrUrl) => {
+    const displayUrl = UTILS.getFotoDisplayUrl(fotoOrUrl);
+    let driveId = typeof fotoOrUrl === "object" ? fotoOrUrl.driveFileId : null;
+    let urlStr = typeof fotoOrUrl === "object" ? (fotoOrUrl.url || "") : String(fotoOrUrl);
+
+    if (!driveId && urlStr.includes("drive.google.com")) {
+      const match = urlStr.match(/[?&]id=([^&]+)/) || urlStr.match(/\/d\/([^/]+)/);
+      if (match) driveId = match[1];
+    }
+
+    if (driveId) {
+      window.open(`https://drive.google.com/file/d/${driveId}/view`, "_blank");
+      return;
+    }
+
+    if (displayUrl.startsWith("data:image/")) {
+      try {
+        const parts = displayUrl.split(",");
+        const mime = (parts[0].match(/:(.*?);/) || [])[1] || "image/jpeg";
+        const bstr = atob(parts[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, "_blank");
+        return;
+      } catch (e) {
+        console.error("Error al abrir blob url", e);
+      }
+    }
+
+    window.open(displayUrl, "_blank");
+  },
+
+  /**
+   * Comparador flexible de IDs
+   */
+  eq: (a, b) => String(a || "").toLowerCase() === String(b || "").toLowerCase()
 };
+
 
 /* =========================================================
  * FASE 3: Identificadores únicos generados en el cliente

@@ -18,6 +18,66 @@ const PRINT_MODULE = {
   },
 
   /**
+   * Genera y descarga/comparte un archivo PDF directamente en móviles y tabletas
+   */
+  downloadPdf: async () => {
+    const modalContent = document.getElementById("print-modal-content");
+    const element = document.getElementById("printable-receipt") || modalContent;
+    if (!element || !element.innerHTML.trim()) {
+      UTILS.showToast("Primero abre la constancia de una orden para guardar en PDF.", "warning");
+      return;
+    }
+
+    const textContent = element.innerText || element.textContent || "";
+    const match = textContent.match(/ORD-\d{4}-\d+/i) || textContent.match(/ORD-[A-Za-z0-9-]+/i);
+    const ordNum = match ? match[0] : "Constancia";
+    const filename = `${ordNum}_Taller_El_Varon.pdf`;
+
+    if (typeof html2pdf !== "undefined") {
+      UTILS.showToast("Generando archivo PDF...", "info");
+      const opt = {
+        margin:       [5, 8, 5, 8],
+        filename:     filename,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        jsPDF:        { unit: 'mm', format: 'letter', orientation: 'portrait' }
+      };
+
+      try {
+        const worker = html2pdf().set(opt).from(element);
+
+        if (navigator.share && navigator.canShare) {
+          try {
+            const pdfBlob = await worker.output('blob');
+            const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+            if (navigator.canShare({ files: [file] })) {
+              await navigator.share({
+                title: `Constancia - ${ordNum}`,
+                text: `Constancia de servicio ${ordNum} — Taller Pablo Rosario - El Varón`,
+                files: [file]
+              });
+              UTILS.showToast("Constancia compartida con éxito");
+              return;
+            }
+          } catch (shareErr) {
+            console.log("Compartir cancelado o no disponible:", shareErr);
+          }
+        }
+
+        await worker.save();
+        UTILS.showToast("PDF descargado con éxito");
+      } catch (err) {
+        console.error("Error al generar PDF:", err);
+        UTILS.showToast("Error al generar PDF. Se abrirá la vista de impresión.", "error");
+        PRINT_MODULE.doPrint();
+      }
+    } else {
+      UTILS.showToast("Abriendo vista de impresión del sistema...", "info");
+      PRINT_MODULE.doPrint();
+    }
+  },
+
+  /**
    * Imprime SOLO la constancia usando un iframe aislado.
    * Ventaja: no depende de @media print global ni de que el modal esté abierto,
    * por lo que nunca sale una página en blanco.
@@ -32,7 +92,7 @@ const PRINT_MODULE = {
     }
 
     // Rutas absolutas para que los estilos e íconos carguen dentro del iframe
-    const cssHref = new URL("index.css?v=5.3", location.href).href;
+    const cssHref = new URL("index.css?v=6.1", location.href).href;
     const faHref = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css";
 
     const doc = `<!DOCTYPE html>

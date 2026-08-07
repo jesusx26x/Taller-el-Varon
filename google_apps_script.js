@@ -497,7 +497,7 @@ function subirFotoDrive(data) {
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
   const fileId = file.getId();
-  const fileUrl = "https://drive.google.com/uc?export=view&id=" + fileId;
+  const fileUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w1000";
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetFotos = getSheetTolerant(ss, "Fotos");

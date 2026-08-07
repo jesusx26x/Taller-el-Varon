@@ -5,21 +5,23 @@
  * - Las llamadas al backend (POST a Apps Script) NO se interceptan: sin conexión
  *   las maneja la cola offline (Outbox) de la app.
  */
-const CACHE = "tev-cache-v6-0";
+const CACHE = "tev-cache-v6-1";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./index.css?v=6.0",
+  "./index.css?v=6.1",
   "./manifest.json",
-  "./utils.js?v=6.0",
-  "./store.js?v=6.0",
-  "./sync.js?v=6.0",
-  "./api.js?v=6.0",
-  "./print.js?v=6.0",
-  "./app.js?v=6.0",
+  "./utils.js?v=6.1",
+  "./store.js?v=6.1",
+  "./sync.js?v=6.1",
+  "./api.js?v=6.1",
+  "./print.js?v=6.1",
+  "./app.js?v=6.1",
+  "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js",
   "./assets/icon-192.png",
   "./assets/icon-512.png"
 ];
+
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {

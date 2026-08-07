@@ -231,6 +231,7 @@
             </tbody>
           </table>
         </div>
+        <div id="mobile-lista-ordenes" class="mobile-card-list"></div>
       </section>
 
       <!-- VISTA 3: CLIENTES -->
@@ -268,6 +269,7 @@
             </tbody>
           </table>
         </div>
+        <div id="mobile-lista-clientes" class="mobile-card-list"></div>
       </section>
 
       <!-- VISTA 4: VEHÍCULOS & HISTORIAL -->
@@ -305,6 +307,7 @@
             </tbody>
           </table>
         </div>
+        <div id="mobile-lista-vehiculos" class="mobile-card-list"></div>
       </section>
 
       <!-- VISTA 5: DETALLE DE ORDEN -->
@@ -314,9 +317,12 @@
             <i class="fas fa-arrow-left"></i> Volver a Lista de Órdenes
           </button>
 
-          <div class="flex-gap-0-5">
+          <div class="flex-gap-0-5" style="flex-wrap: wrap;">
             <button class="btn btn-secondary btn-sm" id="btn-subir-foto-orden">
               <i class="fas fa-camera"></i> Subir Foto Evidencia
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="PRINT_MODULE.downloadPdf()">
+              <i class="fas fa-file-pdf icon-red"></i> DESCARGAR PDF
             </button>
             <button class="btn btn-primary btn-sm" id="btn-imprimir-constancia">
               <i class="fas fa-print"></i> IMPRIMIR CONSTANCIA
@@ -615,12 +621,34 @@
     </div>
   </div>
 
+  <!-- MODAL: VISUALIZAR FOTO AMPLIADA -->
+  <div id="modal-ver-foto" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-container modal-container-lg">
+      <div class="modal-header">
+        <h3 id="modal-ver-foto-titulo"><i class="fas fa-image icon-primary"></i> Evidencia Fotográfica</h3>
+        <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
+      </div>
+      <div class="modal-body" style="text-align: center; padding: 1.5rem;">
+        <img id="modal-ver-foto-img" src="" alt="Foto ampliada" style="max-width: 100%; max-height: 70vh; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: var(--shadow-2); object-fit: contain;">
+        <p id="modal-ver-foto-desc" class="text-subtitle-muted mt-1-5" style="font-weight: 500; font-size: 0.95rem;"></p>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-modal-abrir-externo">
+          <i class="fas fa-external-link-alt"></i> Abrir en Pestaña Nueva
+        </button>
+        <button type="button" class="btn btn-primary btn-sm modal-close">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: IMPRESIÓN DE CONSTANCIA -->
   <div id="print-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+
     <div class="modal-container modal-container-lg">
       <div class="modal-header no-print">
         <h3><i class="fas fa-print"></i> Vista Previa de Constancia Imprimible</h3>
-        <div>
+        <div class="flex-gap-0-5">
+          <button class="btn btn-secondary btn-sm" onclick="PRINT_MODULE.downloadPdf()"><i class="fas fa-file-pdf icon-red"></i> DESCARGAR / COMPARTIR PDF</button>
           <button class="btn btn-primary btn-sm" onclick="PRINT_MODULE.doPrint()"><i class="fas fa-print"></i> IMPRIMIR AHORA</button>
           <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
         </div>
@@ -632,13 +660,16 @@
     </div>
   </div>
 
+  <!-- LIBRERÍA HTML2PDF PARA MOVILES Y TABLETAS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
   <!-- SCRIPTS -->
-  <script src="utils.js?v=6.0"></script>
-  <script src="store.js?v=6.0"></script>
-  <script src="sync.js?v=6.0"></script>
-  <script src="api.js?v=6.0"></script>
-  <script src="print.js?v=6.0"></script>
-  <script src="app.js?v=6.0"></script>
+  <script src="utils.js?v=6.1"></script>
+  <script src="store.js?v=6.1"></script>
+  <script src="sync.js?v=6.1"></script>
+  <script src="api.js?v=6.1"></script>
+  <script src="print.js?v=6.1"></script>
+  <script src="app.js?v=6.1"></script>
 
   <!-- FASE 5: PWA offline real (registro del service worker) -->
   <script>

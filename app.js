@@ -800,14 +800,15 @@ function renderOrdenDetalle(ordenId) {
   `;
 
   const fotosHtml = fotos.length > 0
-    ? fotos.map(f => `
-        <div style="position: relative; display: inline-block; margin: 0.4rem;">
-          <a href="${f.url}" target="_blank">
-            <img src="${f.url}" style="width: 130px; height: 95px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);" title="${f.descripcion || ''}">
-          </a>
-          <p style="font-size: 0.72rem; color: var(--text-muted); width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 0.2rem;">${f.descripcion || 'Sin nota'}</p>
-        </div>
-      `).join("")
+    ? fotos.map(f => {
+        const displayUrl = UTILS.getFotoDisplayUrl(f);
+        return `
+          <div style="position: relative; display: inline-block; margin: 0.4rem; cursor: pointer;" onclick="abrirFotoAmpliada('${f.id}')" title="Clic para ver foto ampliada">
+            <img src="${displayUrl}" style="width: 130px; height: 95px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color); transition: transform 0.2s;" alt="${f.descripcion || 'Evidencia fotográfica'}">
+            <p style="font-size: 0.72rem; color: var(--text-muted); width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 0.2rem;">${f.descripcion || 'Sin nota'}</p>
+          </div>
+        `;
+      }).join("")
     : `<p style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">No hay fotos registradas para esta orden.</p>`;
 
   const detallesHtml = detalles.map((item, idx) => `
@@ -1421,6 +1422,28 @@ function abrirModalAgregarItem(ordenId) {
 function abrirModalSubirFoto(ordenId) {
   document.getElementById("foto-orden-id").value = ordenId;
   document.getElementById("modal-subir-foto").classList.remove("hidden");
+}
+
+function abrirFotoAmpliada(fotoId) {
+  const foto = (STATE.db.fotos || []).find(f => UTILS.eq(f.id, fotoId));
+  if (!foto) {
+    UTILS.showToast("No se encontró la foto especificada", "error");
+    return;
+  }
+  const displayUrl = UTILS.getFotoDisplayUrl(foto);
+  const imgEl = document.getElementById("modal-ver-foto-img");
+  const descEl = document.getElementById("modal-ver-foto-desc");
+  const btnExterno = document.getElementById("btn-modal-abrir-externo");
+
+  if (imgEl) imgEl.src = displayUrl;
+  if (descEl) descEl.textContent = foto.descripcion || "Evidencia fotográfica de la reparación";
+
+  if (btnExterno) {
+    btnExterno.onclick = () => UTILS.openFotoInNewTab(foto);
+  }
+
+  const modal = document.getElementById("modal-ver-foto");
+  if (modal) modal.classList.remove("hidden");
 }
 
 // -------------------------------------------------------------
