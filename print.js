@@ -32,7 +32,7 @@ const PRINT_MODULE = {
     }
 
     // Rutas absolutas para que los estilos e íconos carguen dentro del iframe
-    const cssHref = new URL("index.css?v=5.2", location.href).href;
+    const cssHref = new URL("index.css?v=5.3", location.href).href;
     const faHref = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css";
 
     const doc = `<!DOCTYPE html>
@@ -194,8 +194,9 @@ const PRINT_MODULE = {
         <div class="receipt-totals-container">
           <div class="receipt-notes">
             <p><strong>Términos de Garantía y Condiciones:</strong></p>
-            <ul style="padding-left: 1.2rem; margin-top: 0.3rem; line-height: 1.4;">
-              <li>Todo trabajo técnico de mecánica cuenta con garantía directa de <strong>Taller Pablo Rosario - El Varón</strong>.</li>
+            <ul style="padding-left: 1.2rem; margin-top: 0.3rem; line-height: 1.35;">
+              <li>La garantía aplica exclusivamente sobre el trabajo de <strong>mano de obra y servicio técnico</strong> realizado por el taller, sujeta al uso adecuado y cuidado brindado por el cliente.</li>
+              <li>La garantía <strong>no cubre piezas o repuestos</strong>, ya que el taller no vende repuestos directamente.</li>
               <li>No nos hacemos responsables por objetos de valor dejados en el vehículo sin previo reporte.</li>
               <li>Gracias por confiar el cuidado de su vehículo en las manos de Pablo Rosario y nuestro equipo.</li>
             </ul>
