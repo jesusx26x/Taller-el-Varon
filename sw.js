@@ -5,7 +5,7 @@
  * - Las llamadas al backend (POST a Apps Script) NO se interceptan: sin conexión
  *   las maneja la cola offline (Outbox) de la app.
  */
-const CACHE = "tev-cache-v6-4";
+const CACHE = "tev-cache-v6-5";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -23,12 +23,9 @@ const APP_SHELL = [
   "./assets/icon-512.png"
 ];
 
-
-
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    // Cachea cada recurso de forma tolerante: un fallo individual no aborta la instalación.
     await Promise.all(APP_SHELL.map(async (url) => {
       try {
         const cross = /^https?:\/\//.test(url);
@@ -58,12 +55,19 @@ self.addEventListener("fetch", (event) => {
     event.respondWith((async () => {
       try {
         const net = await fetch(req);
-        const cache = await caches.open(CACHE);
-        cache.put("./index.html", net.clone());
+        if (net && net.status === 200 && !net.redirected) {
+          try {
+            const cache = await caches.open(CACHE);
+            await cache.put("./index.html", net.clone());
+            await cache.put(req, net.clone());
+          } catch (err) {}
+        }
         return net;
       } catch (e) {
         const cache = await caches.open(CACHE);
-        return (await cache.match("./index.html")) || (await cache.match("./")) || Response.error();
+        const match = (await cache.match(req)) || (await cache.match("./index.html")) || (await cache.match("index.html")) || (await cache.match("./"));
+        if (match) return match;
+        return fetch(req).catch(() => new Response("Servicio no disponible sin conexión", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }));
       }
     })());
     return;
@@ -71,12 +75,25 @@ self.addEventListener("fetch", (event) => {
 
   // Resto de GET: stale-while-revalidate.
   event.respondWith((async () => {
-    const cache = await caches.open(CACHE);
-    const cached = await cache.match(req);
-    const network = fetch(req).then((res) => {
-      if (res && (res.ok || res.type === "opaque")) cache.put(req, res.clone());
-      return res;
-    }).catch(() => null);
-    return cached || (await network) || Response.error();
+    try {
+      const cache = await caches.open(CACHE);
+      const cached = await cache.match(req);
+      const networkPromise = fetch(req).then(async (res) => {
+        if (res && (res.status === 200 || res.type === "opaque") && !res.redirected) {
+          try { cache.put(req, res.clone()); } catch (err) {}
+        }
+        return res;
+      }).catch(() => null);
+
+      if (cached) {
+        networkPromise; // Actualiza en segundo plano
+        return cached;
+      }
+      const res = await networkPromise;
+      if (res) return res;
+      return fetch(req);
+    } catch (e) {
+      return fetch(req);
+    }
   })());
 });
