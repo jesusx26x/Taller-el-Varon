@@ -1739,3 +1739,33 @@ input:focus-visible, select:focus-visible, textarea:focus-visible,
     scroll-behavior: auto !important;
   }
 }
+
+/* =========================================================================
+ * CORRECCIONES RESPONSIVE MÓVIL (aditivo) — auditoría móvil
+ * ========================================================================= */
+
+/* Evita el zoom automático de iOS al enfocar campos (fuente ≥16px en móvil) */
+@media (max-width: 768px) {
+  .form-control, .search-input, select.form-control, textarea.form-control { font-size: 16px; }
+}
+
+/* Objetivos táctiles ≥44px en navegación, logout y botones de icono */
+@media (max-width: 768px) {
+  .nav-btn { min-height: 44px; }
+  .btn-logout { width: 44px !important; height: 44px !important; min-height: 44px !important; }
+}
+.btn-sm { min-width: 44px; }
+
+/* Safe-area (notch / home indicator) en modo PWA instalada */
+.app-header { padding-top: calc(0.8rem + env(safe-area-inset-top)); }
+.toast-container { bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
+@media (max-width: 480px) {
+  .modal-footer { padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
+}
+
+/* Altura dinámica del viewport (evita cortes con la barra del navegador móvil) */
+body, #app-container, .login-screen { min-height: 100vh; min-height: 100dvh; }
+.modal-container { max-height: 90vh; max-height: 90dvh; }
+@media (max-width: 480px) {
+  .modal-container { max-height: 100vh; max-height: 100dvh; min-height: 100dvh; }
+}

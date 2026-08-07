@@ -303,3 +303,11 @@ UTILS.folioOrden = function () {
   const rand = Math.random().toString(36).slice(2, 5).toUpperCase();
   return `ORD-${stamp}-${rand}`;
 };
+
+// Escapa texto del usuario antes de interpolarlo en HTML (evita romper el marcado / XSS).
+UTILS.escapeHtml = function (s) {
+  if (s === undefined || s === null) return "";
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+  });
+};

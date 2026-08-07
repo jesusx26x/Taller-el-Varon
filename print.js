@@ -7,73 +7,93 @@ const PRINT_MODULE = {
 
   _lastReceiptHtml: "",
 
-  printOrder: (ord, cli, veh, detalles, fotos) => {
+  // Genera el recibo y lo deja listo (sin abrir el modal). Útil para descargar PDF directo.
+  prepararRecibo: (ord, cli, veh, detalles, fotos) => {
     const modalContent = document.getElementById("print-modal-content");
-    if (!modalContent) return;
-
     const html = PRINT_MODULE.generateReceiptHtml(ord, cli, veh, detalles, fotos);
     PRINT_MODULE._lastReceiptHtml = html;
-    modalContent.innerHTML = html;
-    document.getElementById("print-modal").classList.remove("hidden");
+    if (modalContent) modalContent.innerHTML = html;
+    return html;
+  },
+
+  printOrder: (ord, cli, veh, detalles, fotos) => {
+    PRINT_MODULE.prepararRecibo(ord, cli, veh, detalles, fotos);
+    const modal = document.getElementById("print-modal");
+    if (modal) modal.classList.remove("hidden");
   },
 
   /**
    * Genera y descarga/comparte un archivo PDF directamente en móviles y tabletas
    */
   downloadPdf: async () => {
-    const modalContent = document.getElementById("print-modal-content");
-    const element = document.getElementById("printable-receipt") || modalContent;
-    if (!element || !element.innerHTML.trim()) {
+    let html = PRINT_MODULE._lastReceiptHtml;
+    if (!html || !html.trim()) {
+      const mc = document.getElementById("print-modal-content");
+      html = mc ? mc.innerHTML : "";
+    }
+    if (!html || !html.trim()) {
       UTILS.showToast("Primero abre la constancia de una orden para guardar en PDF.", "warning");
       return;
     }
+
+    // Contenedor temporal VISIBLE fuera de pantalla: evita el PDF en blanco cuando el
+    // recibo vive en un modal oculto (display:none) y fija un ancho tipo carta para que
+    // no salga comprimido en teléfonos.
+    const temp = document.createElement("div");
+    temp.style.cssText = "position:fixed; left:-10000px; top:0; width:794px; background:#ffffff; z-index:-1;";
+    temp.innerHTML = html;
+    document.body.appendChild(temp);
+    const element = temp.querySelector("#printable-receipt") || temp;
 
     const textContent = element.innerText || element.textContent || "";
     const match = textContent.match(/ORD-\d{4}-\d+/i) || textContent.match(/ORD-[A-Za-z0-9-]+/i);
     const ordNum = match ? match[0] : "Constancia";
     const filename = `${ordNum}_Taller_El_Varon.pdf`;
 
-    if (typeof html2pdf !== "undefined") {
+    try {
+      if (typeof html2pdf === "undefined") {
+        UTILS.showToast("Abriendo vista de impresión del sistema...", "info");
+        PRINT_MODULE.doPrint();
+        return;
+      }
+      // Espera a que las fuentes/iconos estén listas para que salgan en el PDF.
+      try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) {}
       UTILS.showToast("Generando archivo PDF...", "info");
       const opt = {
         margin:       [5, 8, 5, 8],
         filename:     filename,
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, logging: false },
+        html2canvas:  { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
         jsPDF:        { unit: 'mm', format: 'letter', orientation: 'portrait' }
       };
+      const worker = html2pdf().set(opt).from(element);
 
-      try {
-        const worker = html2pdf().set(opt).from(element);
-
-        if (navigator.share && navigator.canShare) {
-          try {
-            const pdfBlob = await worker.output('blob');
-            const file = new File([pdfBlob], filename, { type: 'application/pdf' });
-            if (navigator.canShare({ files: [file] })) {
-              await navigator.share({
-                title: `Constancia - ${ordNum}`,
-                text: `Constancia de servicio ${ordNum} — Taller Pablo Rosario - El Varón`,
-                files: [file]
-              });
-              UTILS.showToast("Constancia compartida con éxito");
-              return;
-            }
-          } catch (shareErr) {
-            console.log("Compartir cancelado o no disponible:", shareErr);
+      if (navigator.share && navigator.canShare) {
+        try {
+          const pdfBlob = await worker.output('blob');
+          const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: `Constancia - ${ordNum}`,
+              text: `Constancia de servicio ${ordNum} — Taller Pablo Rosario - El Varón`,
+              files: [file]
+            });
+            UTILS.showToast("Constancia compartida con éxito");
+            return;
           }
+        } catch (shareErr) {
+          console.log("Compartir cancelado o no disponible:", shareErr);
         }
-
-        await worker.save();
-        UTILS.showToast("PDF descargado con éxito");
-      } catch (err) {
-        console.error("Error al generar PDF:", err);
-        UTILS.showToast("Error al generar PDF. Se abrirá la vista de impresión.", "error");
-        PRINT_MODULE.doPrint();
       }
-    } else {
-      UTILS.showToast("Abriendo vista de impresión del sistema...", "info");
+
+      await worker.save();
+      UTILS.showToast("PDF descargado con éxito");
+    } catch (err) {
+      console.error("Error al generar PDF:", err);
+      UTILS.showToast("Error al generar PDF. Se abrirá la vista de impresión.", "error");
       PRINT_MODULE.doPrint();
+    } finally {
+      if (temp && temp.parentNode) temp.parentNode.removeChild(temp);
     }
   },
 

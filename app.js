@@ -804,8 +804,8 @@ function renderOrdenDetalle(ordenId) {
         const displayUrl = UTILS.getFotoDisplayUrl(f);
         return `
           <div style="position: relative; display: inline-block; margin: 0.4rem; cursor: pointer;" onclick="abrirFotoAmpliada('${f.id}')" title="Clic para ver foto ampliada">
-            <img src="${displayUrl}" style="width: 130px; height: 95px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color); transition: transform 0.2s;" alt="${f.descripcion || 'Evidencia fotográfica'}">
-            <p style="font-size: 0.72rem; color: var(--text-muted); width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 0.2rem;">${f.descripcion || 'Sin nota'}</p>
+            <img src="${displayUrl}" loading="lazy" onerror="this.onerror=null;this.src='assets/icon-192.png';this.style.objectFit='contain';this.style.opacity='0.5';" style="width: 130px; height: 95px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color); transition: transform 0.2s;" alt="${UTILS.escapeHtml(f.descripcion || 'Evidencia fotográfica')}">
+            <p style="font-size: 0.72rem; color: var(--text-muted); width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 0.2rem;">${UTILS.escapeHtml(f.descripcion || 'Sin nota')}</p>
           </div>
         `;
       }).join("")
@@ -815,7 +815,7 @@ function renderOrdenDetalle(ordenId) {
     <tr>
       <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
       <td><span class="badge ${item.tipo === 'Repuesto' ? 'badge-pending' : 'badge-process'}">${item.tipo}</span></td>
-      <td><strong>${item.descripcion}</strong></td>
+      <td><strong>${UTILS.escapeHtml(item.descripcion)}</strong></td>
       <td style="text-align: center;" class="tabular-nums">${item.cantidad}</td>
       <td style="text-align: right;" class="tabular-nums">${UTILS.formatMoney(item.precioUnitario)}</td>
       <td style="text-align: right; font-weight: bold; color: var(--color-accent-red);" class="tabular-nums">${UTILS.formatMoney(item.subtotal)}</td>
@@ -825,6 +825,32 @@ function renderOrdenDetalle(ordenId) {
       </td>
     </tr>
   `).join("");
+
+  // FASE MÓVIL: tarjetas de ítems + TOTAL para teléfono (la tabla se oculta en ≤600px).
+  const detalleMobileHtml = `
+    <div class="mobile-card-list" style="margin-top: 0.75rem;">
+      ${detalles.length > 0 ? detalles.map((item, idx) => `
+        <div class="mobile-card-item">
+          <div class="mobile-card-header">
+            <span class="badge ${item.tipo === 'Repuesto' ? 'badge-pending' : 'badge-process'}">${item.tipo}</span>
+            <strong class="tabular-nums" style="color: var(--color-accent-red);">${UTILS.formatMoney(item.subtotal)}</strong>
+          </div>
+          <div class="mobile-card-body" style="grid-template-columns: 1fr;">
+            <div><span class="card-label">#${idx + 1} · Descripción:</span> ${UTILS.escapeHtml(item.descripcion)}</div>
+            <div><span class="card-label">Cant × P. Unit:</span> <span class="tabular-nums">${item.cantidad} × ${UTILS.formatMoney(item.precioUnitario)}</span></div>
+          </div>
+          <div class="mobile-card-footer" style="gap: 0.4rem; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="abrirModalEditarItem('${item.id}')"><i class="fas fa-pen"></i> Editar</button>
+            <button class="btn btn-sm" style="background: var(--color-accent-red); color: #fff;" onclick="eliminarItemUI('${ord.id}','${item.id}')"><i class="fas fa-trash"></i> Eliminar</button>
+          </div>
+        </div>
+      `).join("") : '<div class="mobile-card-item" style="text-align: center; color: var(--text-muted);">No hay trabajos o repuestos. Toca "Añadir Trabajo / Pieza".</div>'}
+      <div class="mobile-card-item" style="display: flex; justify-content: space-between; align-items: center; background: rgba(206, 17, 38, 0.06); font-weight: 700;">
+        <span>TOTAL A COBRAR (RD$)</span>
+        <span class="tabular-nums" style="color: var(--color-accent-red); font-size: 1.15rem;">${UTILS.formatMoney(ord.montoTotal)}</span>
+      </div>
+    </div>
+  `;
 
   container.innerHTML = `
     <!-- TRACKER DE AVANCE FLUIDO -->
@@ -885,6 +911,7 @@ function renderOrdenDetalle(ordenId) {
               </tfoot>
             </table>
           </div>
+          ${detalleMobileHtml}
         </div>
 
         <!-- EVIDENCIA FOTOGRÁFICA -->
@@ -928,6 +955,12 @@ function renderOrdenDetalle(ordenId) {
 
   const btnPrint = document.getElementById("btn-imprimir-constancia");
   if (btnPrint) btnPrint.onclick = () => PRINT_MODULE.printOrder(ord, cli, veh, detalles, fotos);
+
+  const btnPdf = document.getElementById("btn-descargar-pdf");
+  if (btnPdf) btnPdf.onclick = async () => {
+    PRINT_MODULE.prepararRecibo(ord, cli, veh, detalles, fotos);
+    await PRINT_MODULE.downloadPdf();
+  };
 }
 
 async function cambiarEstadoOrden(ordenId, nuevoEstado) {
@@ -1268,6 +1301,7 @@ function initEventListeners() {
     if (!validarArchivoImagen(file)) { e.target.value = ""; return; }
     try {
       const base64 = await UTILS.compressAndConvertImage(file);
+      STATE._fotoBase64 = base64;
       document.getElementById("foto-preview-img").src = base64;
       document.getElementById("foto-preview-container").style.display = "block";
     } catch (err) {
@@ -1293,12 +1327,13 @@ function initEventListeners() {
 
     try {
       if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Subiendo...`; }
-      const base64 = await UTILS.compressAndConvertImage(file);
+      const base64 = STATE._fotoBase64 || await UTILS.compressAndConvertImage(file);
       await API.subirFoto(ordenId, base64, file.name, desc);
       UTILS.showToast("Foto de evidencia guardada");
       document.getElementById("modal-subir-foto").classList.add("hidden");
       document.getElementById("form-subir-foto").reset();
       document.getElementById("foto-preview-container").style.display = "none";
+      STATE._fotoBase64 = null;
       trasEscritura();
     } catch (err) {
       UTILS.showToast("Error al subir foto", "error");

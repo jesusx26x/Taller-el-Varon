@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="es">
-<<head>
+<head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Taller Pablo Rosario - El Varón — Sistema de Gestión Mecánica</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="index.css?v=6.0">
+  <link rel="stylesheet" href="index.css?v=6.2">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
@@ -63,10 +63,10 @@
 
       <nav>
         <ul class="nav-links">
-          <li><a href="#dashboard" class="nav-btn active" id="nav-dashboard"><i class="fas fa-chart-line" aria-hidden="true"></i> <span class="nav-label">Dashboard</span></a></li>
-          <li><a href="#ordenes" class="nav-btn" id="nav-ordenes"><i class="fas fa-file-invoice-dollar" aria-hidden="true"></i> <span class="nav-label">Órdenes</span></a></li>
-          <li><a href="#clientes" class="nav-btn" id="nav-clientes"><i class="fas fa-users" aria-hidden="true"></i> <span class="nav-label">Clientes</span></a></li>
-          <li><a href="#vehiculos" class="nav-btn" id="nav-vehiculos"><i class="fas fa-car" aria-hidden="true"></i> <span class="nav-label">Vehículos</span></a></li>
+          <li><a href="#dashboard" class="nav-btn active" id="nav-dashboard" aria-label="Dashboard"><i class="fas fa-chart-line" aria-hidden="true"></i> <span class="nav-label">Dashboard</span></a></li>
+          <li><a href="#ordenes" class="nav-btn" id="nav-ordenes" aria-label="Órdenes"><i class="fas fa-file-invoice-dollar" aria-hidden="true"></i> <span class="nav-label">Órdenes</span></a></li>
+          <li><a href="#clientes" class="nav-btn" id="nav-clientes" aria-label="Clientes"><i class="fas fa-users" aria-hidden="true"></i> <span class="nav-label">Clientes</span></a></li>
+          <li><a href="#vehiculos" class="nav-btn" id="nav-vehiculos" aria-label="Vehículos"><i class="fas fa-car" aria-hidden="true"></i> <span class="nav-label">Vehículos</span></a></li>
         </ul>
       </nav>
 
@@ -321,7 +321,7 @@
             <button class="btn btn-secondary btn-sm" id="btn-subir-foto-orden">
               <i class="fas fa-camera"></i> Subir Foto Evidencia
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="PRINT_MODULE.downloadPdf()">
+            <button class="btn btn-secondary btn-sm" id="btn-descargar-pdf" onclick="PRINT_MODULE.downloadPdf()">
               <i class="fas fa-file-pdf icon-red"></i> DESCARGAR PDF
             </button>
             <button class="btn btn-primary btn-sm" id="btn-imprimir-constancia">
@@ -492,7 +492,7 @@
 
           <div class="form-group">
             <label for="veh-ano">Año *</label>
-            <input type="text" id="veh-ano" class="form-control" placeholder="Ej: 2017" list="list-anos" required autocomplete="off">
+            <input type="text" id="veh-ano" class="form-control" placeholder="Ej: 2017" list="list-anos" inputmode="numeric" required autocomplete="off">
             <datalist id="list-anos">
               <option value="2026"><option value="2025"><option value="2024"><option value="2023">
               <option value="2022"><option value="2021"><option value="2020"><option value="2019">
@@ -600,7 +600,7 @@
         <div class="modal-body">
           <div class="form-group">
             <label for="foto-input">Tomar foto o seleccionar archivo *</label>
-            <input type="file" id="foto-input" class="form-control" accept="image/*" capture="environment" required>
+            <input type="file" id="foto-input" class="form-control" accept="image/*" required>
           </div>
 
           <div id="foto-preview-container" class="foto-preview-box">
@@ -664,12 +664,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <!-- SCRIPTS -->
-  <script src="utils.js?v=6.1"></script>
-  <script src="store.js?v=6.1"></script>
-  <script src="sync.js?v=6.1"></script>
-  <script src="api.js?v=6.1"></script>
-  <script src="print.js?v=6.1"></script>
-  <script src="app.js?v=6.1"></script>
+  <script src="utils.js?v=6.2"></script>
+  <script src="store.js?v=6.2"></script>
+  <script src="sync.js?v=6.2"></script>
+  <script src="api.js?v=6.2"></script>
+  <script src="print.js?v=6.2"></script>
+  <script src="app.js?v=6.2"></script>
 
   <!-- FASE 5: PWA offline real (registro del service worker) -->
   <script>
