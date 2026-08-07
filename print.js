@@ -32,7 +32,7 @@ const PRINT_MODULE = {
     }
 
     // Rutas absolutas para que los estilos e íconos carguen dentro del iframe
-    const cssHref = new URL("index.css?v=4.0", location.href).href;
+    const cssHref = new URL("index.css?v=5.2", location.href).href;
     const faHref = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css";
 
     const doc = `<!DOCTYPE html>
@@ -43,6 +43,8 @@ const PRINT_MODULE = {
   @page { size: letter; margin: 8mm 10mm; }
   html, body { margin: 0; padding: 0; background: #fff; }
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #printable-receipt, #printable-receipt * { visibility: visible !important; }
+  #printable-receipt { display: block !important; }
 </style>
 </head><body>${receiptHtml}</body></html>`;
 

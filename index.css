@@ -741,8 +741,8 @@ a {
     padding: 0 !important;
   }
 
-  /* Ocultar todo el sitio principal durante la impresión */
-  body > *:not(#print-modal) {
+  /* Ocultar todo el sitio principal durante la impresión (excepto el modal y la constancia aislada) */
+  body > *:not(#print-modal):not(#printable-receipt) {
     display: none !important;
   }
 
@@ -788,6 +788,7 @@ a {
 
   #printable-receipt {
     position: static !important;
+    display: block !important;
     width: 100% !important;
     background: #ffffff !important;
     color: #000000 !important;

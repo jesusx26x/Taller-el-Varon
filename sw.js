@@ -5,18 +5,18 @@
  * - Las llamadas al backend (POST a Apps Script) NO se interceptan: sin conexión
  *   las maneja la cola offline (Outbox) de la app.
  */
-const CACHE = "tev-cache-v5-1";
+const CACHE = "tev-cache-v5-2";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./index.css?v=5.1",
+  "./index.css?v=5.2",
   "./manifest.json",
-  "./utils.js?v=5.1",
-  "./store.js?v=5.1",
-  "./sync.js?v=5.1",
-  "./api.js?v=5.1",
-  "./print.js?v=5.1",
-  "./app.js?v=5.1",
+  "./utils.js?v=5.2",
+  "./store.js?v=5.2",
+  "./sync.js?v=5.2",
+  "./api.js?v=5.2",
+  "./print.js?v=5.2",
+  "./app.js?v=5.2",
   "./assets/icon-192.png",
   "./assets/icon-512.png"
 ];
