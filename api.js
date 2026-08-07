@@ -41,7 +41,7 @@ const API = {
       } catch (err) { console.warn("Fallo en login de nube. Intentando validación local:", err); }
     }
     if (usuario === "prosario" && clave === "tallerelvaron") {
-      const data = { token: "TOKEN_LOCAL_PABLO_ROSARIO", usuario: "Pablo Rosario", taller: "Taller El Varón (Modo Local)" };
+      const data = { token: "TOKEN_LOCAL_PABLO_ROSARIO", usuario: "Pablo Rosario", taller: "Taller Pablo Rosario - El Varón (Modo Local)" };
       localStorage.setItem(CONFIG.TOKEN_KEY, data.token);
       localStorage.setItem(CONFIG.USER_KEY, JSON.stringify(data));
       return data;

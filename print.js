@@ -113,7 +113,7 @@ const PRINT_MODULE = {
             <div style="display: flex; align-items: center; gap: 0.8rem;">
               <div style="width: 46px; height: 46px; background: #CE1126; border-radius: 8px; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700;">V</div>
               <div>
-                <h1 class="receipt-title">TALLER EL VARÓN</h1>
+                <h1 class="receipt-title">TALLER PABLO ROSARIO - EL VARÓN</h1>
                 <p class="receipt-subtitle">MECÁNICA EN GENERAL • ESPECIALIDAD EN JAPONESES Y AMERICANOS</p>
               </div>
             </div>
@@ -193,7 +193,7 @@ const PRINT_MODULE = {
           <div class="receipt-notes">
             <p><strong>Términos de Garantía y Condiciones:</strong></p>
             <ul style="padding-left: 1.2rem; margin-top: 0.3rem; line-height: 1.4;">
-              <li>Todo trabajo técnico de mecánica cuenta con garantía directa de <strong>Taller El Varón</strong>.</li>
+              <li>Todo trabajo técnico de mecánica cuenta con garantía directa de <strong>Taller Pablo Rosario - El Varón</strong>.</li>
               <li>No nos hacemos responsables por objetos de valor dejados en el vehículo sin previo reporte.</li>
               <li>Gracias por confiar el cuidado de su vehículo en las manos de Pablo Rosario y nuestro equipo.</li>
             </ul>
@@ -220,7 +220,7 @@ const PRINT_MODULE = {
           <div class="sig-line">
             <div class="sig-border"></div>
             <p class="sig-name">Pablo Rosario</p>
-            <p class="sig-title">Administrador — Taller El Varón</p>
+            <p class="sig-title">Administrador — Taller Pablo Rosario - El Varón</p>
           </div>
           <div class="sig-line">
             <div class="sig-border"></div>
@@ -230,7 +230,7 @@ const PRINT_MODULE = {
         </div>
 
         <div class="receipt-footer">
-          Taller El Varón — Calle Faisán No. 83, Los Alcarrizos • Tel/WhatsApp: (829)-941-9044 • pablorosario24201626@gmail.com
+          Taller Pablo Rosario - El Varón — Calle Faisán No. 83, Los Alcarrizos • Tel/WhatsApp: (829)-941-9044 • pablorosario24201626@gmail.com
         </div>
 
       </div>

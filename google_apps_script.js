@@ -67,7 +67,7 @@ function handleRequest(e, method) {
           data: {
             token: "TOKEN_PABLO_ROSARIO_2026",
             usuario: "Pablo Rosario",
-            taller: "Taller El Varón"
+            taller: "Taller Pablo Rosario - El Varón"
           }
         });
       } else {

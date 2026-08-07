@@ -1,6 +1,6 @@
-# 🔧 Taller El Varón — Sistema de Gestión de Taller Mecánico
+# 🔧 Taller Pablo Rosario - El Varón — Sistema de Gestión de Taller Mecánico
 
-Sistema web responsivo para **Pablo Rosario** (Taller El Varón, Los Alcarrizos, Santo Domingo).
+Sistema web responsivo para **Pablo Rosario** (Taller Pablo Rosario - El Varón, Los Alcarrizos, Santo Domingo).
 
 🔗 **Enlace Público (GitHub Pages)**: [https://jesusx26x.github.io/Taller-el-Varon/](https://jesusx26x.github.io/Taller-el-Varon/)
 
