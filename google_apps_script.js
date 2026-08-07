@@ -50,6 +50,15 @@ function handleRequest(e, method) {
 
     const action = params.action;
     const data = params.data || {};
+    const opId = params.opId;
+    const ACCIONES_ESCRITURA = {
+      crearCliente: 1, actualizarCliente: 1, crearVehiculo: 1, actualizarVehiculo: 1,
+      crearOrden: 1, actualizarEstadoOrden: 1, agregarServicioAOrden: 1, editarServicioDetalle: 1,
+      eliminarServicioDetalle: 1, eliminarOrden: 1, subirFoto: 1, eliminarRegistro: 1
+    };
+    if (opId && ACCIONES_ESCRITURA[action] && yaProcesado(opId)) {
+      return jsonResponse({ status: "success", data: { idempotent: true, opId: opId } });
+    }
 
     if (action === "login") {
       if (data.usuario === CREDENTIALS.usuario && data.clave === CREDENTIALS.clave) {
@@ -96,6 +105,15 @@ function handleRequest(e, method) {
       case "agregarServicioAOrden":
         result = agregarServicioAOrden(data);
         break;
+      case "editarServicioDetalle":
+        result = editarServicioDetalle(data);
+        break;
+      case "eliminarServicioDetalle":
+        result = eliminarServicioDetalle(data);
+        break;
+      case "eliminarOrden":
+        result = eliminarOrdenCascada(data.ordenId);
+        break;
 
       case "subirFoto":
         result = subirFotoDrive(data);
@@ -109,6 +127,7 @@ function handleRequest(e, method) {
         return jsonResponse({ status: "error", message: "Acción no reconocida: " + action });
     }
 
+    if (opId && ACCIONES_ESCRITURA[action]) marcarProcesado(opId);
     return jsonResponse({ status: "success", data: result });
 
   } catch (error) {
@@ -119,6 +138,77 @@ function handleRequest(e, method) {
 function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Inserta o actualiza una fila por su id (columna 1). Idempotente: reintentar no duplica.
+function upsertFilaPorId(sheet, rowArray) {
+  if (!sheet) throw new Error("Hoja no encontrada para upsert");
+  const id = rowArray[0];
+  const filas = sheet.getDataRange().getValues();
+  for (let i = 1; i < filas.length; i++) {
+    if (String(filas[i][0]) === String(id)) {
+      sheet.getRange(i + 1, 1, 1, rowArray.length).setValues([rowArray]);
+      return "update";
+    }
+  }
+  sheet.appendRow(rowArray);
+  return "insert";
+}
+
+// Idempotencia por opId (evita reprocesar si la respuesta se perdió tras un timeout).
+function yaProcesado(opId) {
+  try { return opId && PropertiesService.getScriptProperties().getProperty("op_" + opId) != null; }
+  catch (e) { return false; }
+}
+function marcarProcesado(opId) {
+  try { if (opId) PropertiesService.getScriptProperties().setProperty("op_" + opId, String(Date.now())); }
+  catch (e) { /* sin PropertiesService */ }
+}
+function _esBorrado(v) { return v === true || String(v).toLowerCase() === "true"; }
+
+// Borrado por id: LÓGICO si existe la columna 'deleted'; si no, físico (compatibilidad).
+function borrarPorId(sheet, id) {
+  if (!sheet) return false;
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0] || [];
+  const di = headers.indexOf("deleted");
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(id)) {
+      if (di >= 0) {
+        sheet.getRange(i + 1, di + 1).setValue(true);
+        const dai = headers.indexOf("deletedAt"); if (dai >= 0) sheet.getRange(i + 1, dai + 1).setValue(getDominicanDateISO());
+        const uai = headers.indexOf("updatedAt"); if (uai >= 0) sheet.getRange(i + 1, uai + 1).setValue(getDominicanDateISO());
+      } else {
+        sheet.deleteRow(i + 1);
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+// Borrado por columna (p.ej. ordenId): lógico si hay 'deleted', si no físico.
+function borrarPorColumna(sheet, colIndex1based, valor) {
+  if (!sheet) return 0;
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0] || [];
+  const di = headers.indexOf("deleted");
+  let n = 0;
+  if (di >= 0) {
+    const dai = headers.indexOf("deletedAt");
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][colIndex1based - 1]) === String(valor) && !_esBorrado(rows[i][di])) {
+        sheet.getRange(i + 1, di + 1).setValue(true);
+        if (dai >= 0) sheet.getRange(i + 1, dai + 1).setValue(getDominicanDateISO());
+        n++;
+      }
+    }
+  } else {
+    for (let i = rows.length - 1; i >= 1; i--) {
+      if (String(rows[i][colIndex1based - 1]) === String(valor)) { sheet.deleteRow(i + 1); n++; }
+    }
+  }
+  return n;
 }
 
 function obtenerTodoElSistema() {
@@ -164,11 +254,11 @@ function sheetToObjects(sheet) {
 }
 
 function getDominicanDateISO() {
-  try {
-    return Utilities.formatDate(new Date(), "America/Santo_Domingo", "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
-  } catch (e) {
-    return new Date().toISOString();
-  }
+  // Guarda SIEMPRE en UTC real (ISO 8601). La presentación a hora dominicana
+  // se hace en el frontend con toLocaleString("es-DO"). Antes se formateaba a
+  // hora local y se le pegaba el sufijo "Z" (UTC), lo que descuadraba las
+  // comparaciones de fecha/hora entre la PC y el celular.
+  return new Date().toISOString();
 }
 
 function crearRegistro(nombreHoja, data, prefijo) {
@@ -188,16 +278,17 @@ function crearRegistro(nombreHoja, data, prefijo) {
     }
 
     const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-    const lastRow = sheet.getLastRow();
-    const newId = prefijo + "-" + String(lastRow).padStart(4, "0");
-    data.id = newId;
+
+    // Usa el id que envía el cliente (UUID) si viene; si no, genera uno.
+    if (!data.id) data.id = prefijo + "-" + String(sheet.getLastRow()).padStart(4, "0");
 
     if (nombreHoja === "Clientes" && !data.fechaRegistro) {
       data.fechaRegistro = getDominicanDateISO().split("T")[0];
     }
 
+    // UPSERT por id (idempotente).
     const rowToInsert = headers.map(header => data[header] !== undefined ? data[header] : "");
-    sheet.appendRow(rowToInsert);
+    upsertFilaPorId(sheet, rowToInsert);
 
     return data;
   } finally {
@@ -232,11 +323,8 @@ function crearOrdenCompleta(data) {
     const sheetOrdenes = getSheetTolerant(ss, "Ordenes");
     const sheetDetalle = getSheetTolerant(ss, "DetalleServicios");
 
-    const year = new Date().getFullYear();
-    const count = sheetOrdenes.getLastRow();
-    const ordenId = "ORD-" + year + "-" + String(count).padStart(4, "0");
-
-    const fechaIngreso = getDominicanDateISO();
+    const ordenId = data.id || ("ORD-" + new Date().getFullYear() + "-" + String(sheetOrdenes.getLastRow()).padStart(4, "0"));
+    const fechaIngreso = data.fechaIngreso || getDominicanDateISO();
     let montoTotal = 0;
 
     if (data.servicios && Array.isArray(data.servicios)) {
@@ -244,8 +332,8 @@ function crearOrdenCompleta(data) {
         const itemSubtotal = (Number(item.cantidad) || 1) * (Number(item.precioUnitario) || 0);
         montoTotal += itemSubtotal;
 
-        const itemId = "DET-" + ordenId + "-" + (index + 1);
-        sheetDetalle.appendRow([
+        const itemId = item.id || ("DET-" + ordenId + "-" + (index + 1));
+        upsertFilaPorId(sheetDetalle, [
           itemId,
           ordenId,
           item.tipo || "Servicio",
@@ -271,7 +359,7 @@ function crearOrdenCompleta(data) {
       data.notas || ""
     ];
 
-    sheetOrdenes.appendRow(nuevaOrden);
+    upsertFilaPorId(sheetOrdenes, nuevaOrden);
 
     return {
       id: ordenId,
@@ -313,9 +401,9 @@ function agregarServicioAOrden(data) {
   const sheetOrdenes = getSheetTolerant(ss, "Ordenes");
 
   const subtotal = (Number(data.cantidad) || 1) * (Number(data.precioUnitario) || 0);
-  const itemId = "DET-" + Date.now();
+  const itemId = data.id || ("DET-" + Date.now());
 
-  sheetDetalle.appendRow([
+  upsertFilaPorId(sheetDetalle, [
     itemId,
     data.ordenId,
     data.tipo || "Repuesto",
@@ -325,21 +413,23 @@ function agregarServicioAOrden(data) {
     subtotal
   ]);
 
-  const detalles = sheetToObjects(sheetDetalle).filter(d => d.ordenId === data.ordenId);
-  const nuevoTotal = detalles.reduce((sum, item) => sum + (Number(item.subtotal) || 0), 0);
-
-  const ordenes = sheetOrdenes.getDataRange().getValues();
-  for (let i = 1; i < ordenes.length; i++) {
-    if (ordenes[i][0] == data.ordenId) {
-      sheetOrdenes.getRange(i + 1, 10).setValue(nuevoTotal);
-      break;
-    }
-  }
-
+  const nuevoTotal = recalcularTotalOrden(ss, data.ordenId);
   return { id: itemId, ordenId: data.ordenId, nuevoTotal: nuevoTotal };
 }
 
 function subirFotoDrive(data) {
+  // Idempotencia: si ya existe una foto con este id (reintento), no re-subir.
+  const ssFotoIdem = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetFotosIdem = getSheetTolerant(ssFotoIdem, "Fotos");
+  if (data.id && sheetFotosIdem) {
+    const filasIdem = sheetFotosIdem.getDataRange().getValues();
+    for (let i = 1; i < filasIdem.length; i++) {
+      if (String(filasIdem[i][0]) === String(data.id)) {
+        return { id: data.id, ordenId: filasIdem[i][1], driveFileId: filasIdem[i][2], url: filasIdem[i][3], fechaSubida: filasIdem[i][5] };
+      }
+    }
+  }
+
   let targetFolder;
 
   if (DRIVE_FOLDER_ID && DRIVE_FOLDER_ID.trim() !== "") {
@@ -360,10 +450,10 @@ function subirFotoDrive(data) {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetFotos = getSheetTolerant(ss, "Fotos");
-  const fotoId = "IMG-" + Date.now();
+  const fotoId = data.id || ("IMG-" + Date.now());
   const fecha = getDominicanDateISO();
 
-  sheetFotos.appendRow([
+  upsertFilaPorId(sheetFotos, [
     fotoId,
     data.ordenId,
     fileId,
@@ -381,16 +471,108 @@ function subirFotoDrive(data) {
   };
 }
 
+// Recalcula el montoTotal de una orden sumando sus detalles (columna 10 en Ordenes).
+function recalcularTotalOrden(ss, ordenId) {
+  const sheetDetalle = getSheetTolerant(ss, "DetalleServicios");
+  const sheetOrdenes = getSheetTolerant(ss, "Ordenes");
+  const detalles = sheetToObjects(sheetDetalle).filter(d => d.ordenId == ordenId && !_esBorrado(d.deleted));
+  const total = detalles.reduce((s, i) => s + (Number(i.subtotal) || 0), 0);
+  const ordenes = sheetOrdenes.getDataRange().getValues();
+  for (let i = 1; i < ordenes.length; i++) {
+    if (ordenes[i][0] == ordenId) {
+      sheetOrdenes.getRange(i + 1, 10).setValue(total);
+      break;
+    }
+  }
+  return total;
+}
+
+// Edita una línea de servicio/repuesto y recalcula el total de la orden.
+function editarServicioDetalle(data) {
+  const lock = LockService.getScriptLock();
+  lock.tryLock(10000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getSheetTolerant(ss, "DetalleServicios");
+    const rows = sheet.getDataRange().getValues();
+    const headers = rows[0];
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] == data.id) {
+        const cant = Number(data.cantidad) || 1;
+        const precio = Number(data.precioUnitario) || 0;
+        const subtotal = cant * precio;
+        const ordenId = rows[i][1];
+        const map = {
+          id: rows[i][0],
+          ordenId: ordenId,
+          tipo: data.tipo,
+          descripcion: data.descripcion,
+          cantidad: cant,
+          precioUnitario: precio,
+          subtotal: subtotal
+        };
+        const newRow = headers.map(h => map[h] !== undefined ? map[h] : rows[i][headers.indexOf(h)]);
+        sheet.getRange(i + 1, 1, 1, newRow.length).setValues([newRow]);
+        const nuevoTotal = recalcularTotalOrden(ss, ordenId);
+        return { id: data.id, ordenId: ordenId, nuevoTotal: nuevoTotal };
+      }
+    }
+    throw new Error("Detalle no encontrado: " + data.id);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Elimina una línea de servicio/repuesto y recalcula el total de la orden.
+function eliminarServicioDetalle(data) {
+  const lock = LockService.getScriptLock();
+  lock.tryLock(10000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getSheetTolerant(ss, "DetalleServicios");
+    const rows = sheet.getDataRange().getValues();
+    let ordenId = data.ordenId;
+    for (let i = 1; i < rows.length; i++) { if (rows[i][0] == data.id) { ordenId = rows[i][1]; break; } }
+    borrarPorId(sheet, data.id);
+    const nuevoTotal = recalcularTotalOrden(ss, ordenId);
+    return { id: data.id, ordenId: ordenId, nuevoTotal: nuevoTotal };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Borra todas las filas de una hoja cuyo valor en 'colIndex1based' coincida.
+function borrarFilasPorColumna(sheet, colIndex1based, valor) {
+  if (!sheet) return 0;
+  const rows = sheet.getDataRange().getValues();
+  let borradas = 0;
+  for (let i = rows.length - 1; i >= 1; i--) {
+    if (rows[i][colIndex1based - 1] == valor) {
+      sheet.deleteRow(i + 1);
+      borradas++;
+    }
+  }
+  return borradas;
+}
+
+// Elimina una orden y en cascada sus detalles y sus fotos (evita huérfanos).
+function eliminarOrdenCascada(ordenId) {
+  const lock = LockService.getScriptLock();
+  lock.tryLock(10000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    borrarPorColumna(getSheetTolerant(ss, "DetalleServicios"), 2, ordenId); // col ordenId
+    borrarPorColumna(getSheetTolerant(ss, "Fotos"), 2, ordenId);            // col ordenId
+    borrarPorColumna(getSheetTolerant(ss, "Ordenes"), 1, ordenId);          // col id
+    return { id: ordenId, eliminado: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function eliminarRegistro(nombreHoja, id) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getSheetTolerant(ss, nombreHoja);
-  const rows = sheet.getDataRange().getValues();
-
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0] == id) {
-      sheet.deleteRow(i + 1);
-      return { id: id, eliminado: true };
-    }
-  }
+  if (borrarPorId(sheet, id)) return { id: id, eliminado: true };
   throw new Error("No se pudo eliminar el registro con ID: " + id);
 }

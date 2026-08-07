@@ -72,3 +72,22 @@ Para sincronizar datos en tiempo real entre la PC y el teléfono de Pablo:
    - Pega la URL de Apps Script y haz clic en **Guardar Conexión**.
 
 ¡Listo! Todo quedará sincronizado automáticamente entre la PC y el celular de Pablo.
+
+---
+
+## 🔄 Columnas para el modo offline (Fases 3-4)
+
+Para que el guardado sin conexión y la sincronización sin duplicados funcionen al 100%
+(incluyendo borrados que no "reviven" y resolución de conflictos entre dispositivos),
+añade estas columnas **al final de la Fila 1** de las **5 hojas** (Clientes, Vehiculos,
+Ordenes, DetalleServicios, Fotos):
+
+`uuid` | `createdAt` | `updatedAt` | `deleted` | `deletedAt`
+
+- El backend es **tolerante**: si NO agregas estas columnas, la app sigue funcionando
+  (los borrados serán físicos y no habrá timestamps en la nube).
+- Si SÍ las agregas: los borrados se vuelven **lógicos** (tombstones) y se guardan las
+  marcas de tiempo, habilitando la sincronización segura multi-dispositivo.
+
+Recuerda: tras cambiar el código del backend, vuelve a pegar `google_apps_script.js` en
+Apps Script y crea un **despliegue (versión) nuevo**.
