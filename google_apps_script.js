@@ -2,10 +2,27 @@
  * TALLER EL VARÓN - BACKEND GOOGLE APPS SCRIPT (RESILIENTE)
  */
 
+// Credenciales por defecto SOLO como respaldo. En producción se configuran en
+// Extensiones -> Apps Script -> Configuración del proyecto -> Propiedades del script:
+//   CRED_USER, CRED_PASS y (opcional) API_TOKEN.  Así el secreto NO vive en el repo.
 const CREDENTIALS = {
   usuario: "prosario",
   clave: "tallerelvaron"
 };
+
+function _props() { return PropertiesService.getScriptProperties(); }
+function getCred() {
+  const p = _props();
+  return { usuario: p.getProperty("CRED_USER") || CREDENTIALS.usuario, clave: p.getProperty("CRED_PASS") || CREDENTIALS.clave };
+}
+// Token secreto del API: se guarda en Script Properties; si no existe, se autogenera
+// (nunca queda en el repositorio). El cliente lo obtiene al iniciar sesión.
+function getApiToken() {
+  const p = _props();
+  let t = p.getProperty("API_TOKEN");
+  if (!t) { t = Utilities.getUuid(); p.setProperty("API_TOKEN", t); }
+  return t;
+}
 
 const DRIVE_FOLDER_ID = ""; // OPCIONAL: ID de carpeta de Google Drive
 
@@ -51,6 +68,12 @@ function handleRequest(e, method) {
     const action = params.action;
     const data = params.data || {};
     const opId = params.opId;
+
+    // --- AUTENTICACIÓN: toda acción excepto "login" exige un token válido. ---
+    if (action !== "login" && (!params.token || params.token !== getApiToken())) {
+      return jsonResponse({ status: "error", message: "No autorizado. Inicia sesión de nuevo." });
+    }
+
     const ACCIONES_ESCRITURA = {
       crearCliente: 1, actualizarCliente: 1, crearVehiculo: 1, actualizarVehiculo: 1,
       crearOrden: 1, actualizarEstadoOrden: 1, agregarServicioAOrden: 1, editarServicioDetalle: 1,
@@ -61,11 +84,12 @@ function handleRequest(e, method) {
     }
 
     if (action === "login") {
-      if (data.usuario === CREDENTIALS.usuario && data.clave === CREDENTIALS.clave) {
+      const cred = getCred();
+      if (data.usuario === cred.usuario && data.clave === cred.clave) {
         return jsonResponse({
           status: "success",
           data: {
-            token: "TOKEN_PABLO_ROSARIO_2026",
+            token: getApiToken(),
             usuario: "Pablo Rosario",
             taller: "Taller Pablo Rosario - El Varón"
           }
@@ -160,13 +184,21 @@ function upsertFilaPorId(sheet, rowArray) {
 }
 
 // Idempotencia por opId (evita reprocesar si la respuesta se perdió tras un timeout).
-function yaProcesado(opId) {
-  try { return opId && PropertiesService.getScriptProperties().getProperty("op_" + opId) != null; }
-  catch (e) { return false; }
+function _getProcesados() {
+  try { const raw = _props().getProperty("PROCESADOS"); const a = raw ? JSON.parse(raw) : []; return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
 }
+function yaProcesado(opId) { if (!opId) return false; return _getProcesados().indexOf(opId) !== -1; }
 function marcarProcesado(opId) {
-  try { if (opId) PropertiesService.getScriptProperties().setProperty("op_" + opId, String(Date.now())); }
-  catch (e) { /* sin PropertiesService */ }
+  if (!opId) return;
+  try {
+    let a = _getProcesados();
+    if (a.indexOf(opId) === -1) {
+      a.push(opId);
+      if (a.length > 800) a = a.slice(a.length - 800); // tope: evita saturar Script Properties
+      _props().setProperty("PROCESADOS", JSON.stringify(a));
+    }
+  } catch (e) { /* sin PropertiesService */ }
 }
 function _esBorrado(v) { return v === true || String(v).toLowerCase() === "true"; }
 
@@ -192,24 +224,20 @@ function ejecutarAccion(action, data) {
 // FASE C: procesa TODA la cola en una sola petición (menos viajes de red).
 // Idempotente por opId; devuelve un resultado por operación.
 function procesarLote(ops) {
-  const lock = LockService.getScriptLock();
-  lock.tryLock(30000);
-  try {
-    const resultados = [];
-    (ops || []).forEach(function (op) {
-      try {
-        if (op.opId && yaProcesado(op.opId)) { resultados.push({ opId: op.opId, status: "success", idempotent: true }); return; }
-        const r = ejecutarAccion(op.action, op.data || {});
-        if (op.opId) marcarProcesado(op.opId);
-        resultados.push({ opId: op.opId, status: "success", data: r });
-      } catch (e) {
-        resultados.push({ opId: op.opId, status: "error", message: String(e) });
-      }
-    });
-    return resultados;
-  } finally {
-    lock.releaseLock();
-  }
+  // Sin lock externo: cada acción toma su propio lock de forma individual, evitando
+  // que un releaseLock interno anule la exclusión mutua a mitad del lote.
+  const resultados = [];
+  (ops || []).forEach(function (op) {
+    try {
+      if (op.opId && yaProcesado(op.opId)) { resultados.push({ opId: op.opId, status: "success", idempotent: true }); return; }
+      const r = ejecutarAccion(op.action, op.data || {});
+      if (op.opId) marcarProcesado(op.opId);
+      resultados.push({ opId: op.opId, status: "success", data: r });
+    } catch (e) {
+      resultados.push({ opId: op.opId, status: "error", message: String(e) });
+    }
+  });
+  return resultados;
 }
 
 // Borrado por id: LÓGICO si existe la columna 'deleted'; si no, físico (compatibilidad).
@@ -314,7 +342,7 @@ function getDominicanDateISO() {
 
 function crearRegistro(nombreHoja, data, prefijo) {
   const lock = LockService.getScriptLock();
-  lock.tryLock(10000);
+  if (!lock.tryLock(10000)) throw new Error("Sistema ocupado, reintente");
 
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -334,7 +362,8 @@ function crearRegistro(nombreHoja, data, prefijo) {
     if (!data.id) data.id = prefijo + "-" + String(sheet.getLastRow()).padStart(4, "0");
 
     if (nombreHoja === "Clientes" && !data.fechaRegistro) {
-      data.fechaRegistro = getDominicanDateISO().split("T")[0];
+      try { data.fechaRegistro = Utilities.formatDate(new Date(), "America/Santo_Domingo", "yyyy-MM-dd"); }
+      catch (e) { data.fechaRegistro = getDominicanDateISO().split("T")[0]; }
     }
 
     // UPSERT por id (idempotente).
@@ -367,7 +396,7 @@ function actualizarRegistro(nombreHoja, data) {
 
 function crearOrdenCompleta(data) {
   const lock = LockService.getScriptLock();
-  lock.tryLock(10000);
+  if (!lock.tryLock(10000)) throw new Error("Sistema ocupado, reintente");
 
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -428,22 +457,28 @@ function crearOrdenCompleta(data) {
 }
 
 function actualizarEstadoOrden(ordenId, nuevoEstado, fechaEntrega) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = getSheetTolerant(ss, "Ordenes");
-  const rows = sheet.getDataRange().getValues();
-
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i][0] == ordenId) {
-      sheet.getRange(i + 1, 6).setValue(nuevoEstado);
-      if (nuevoEstado === "Entregado" || fechaEntrega) {
-        sheet.getRange(i + 1, 5).setValue(fechaEntrega || getDominicanDateISO());
-      } else {
-        sheet.getRange(i + 1, 5).setValue("");
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) throw new Error("Sistema ocupado, reintente");
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getSheetTolerant(ss, "Ordenes");
+    const rows = sheet.getDataRange().getValues();
+    const headers = rows[0] || [];
+    const uaCol = headers.indexOf("updatedAt");
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] == ordenId) {
+        sheet.getRange(i + 1, 6).setValue(nuevoEstado);
+        if (nuevoEstado === "Entregado" || fechaEntrega) {
+          sheet.getRange(i + 1, 5).setValue(fechaEntrega || getDominicanDateISO());
+        } else {
+          sheet.getRange(i + 1, 5).setValue("");
+        }
+        if (uaCol >= 0) sheet.getRange(i + 1, uaCol + 1).setValue(getDominicanDateISO());
+        return { id: ordenId, estado: nuevoEstado };
       }
-      return { id: ordenId, estado: nuevoEstado };
     }
-  }
-  throw new Error("Orden no encontrada: " + ordenId);
+    throw new Error("Orden no encontrada: " + ordenId);
+  } finally { lock.releaseLock(); }
 }
 
 function agregarServicioAOrden(data) {
@@ -541,7 +576,7 @@ function recalcularTotalOrden(ss, ordenId) {
 // Edita una línea de servicio/repuesto y recalcula el total de la orden.
 function editarServicioDetalle(data) {
   const lock = LockService.getScriptLock();
-  lock.tryLock(10000);
+  if (!lock.tryLock(10000)) throw new Error("Sistema ocupado, reintente");
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = getSheetTolerant(ss, "DetalleServicios");
@@ -560,7 +595,8 @@ function editarServicioDetalle(data) {
           descripcion: data.descripcion,
           cantidad: cant,
           precioUnitario: precio,
-          subtotal: subtotal
+          subtotal: subtotal,
+          updatedAt: getDominicanDateISO()
         };
         const newRow = headers.map(h => map[h] !== undefined ? map[h] : rows[i][headers.indexOf(h)]);
         sheet.getRange(i + 1, 1, 1, newRow.length).setValues([newRow]);
@@ -577,7 +613,7 @@ function editarServicioDetalle(data) {
 // Elimina una línea de servicio/repuesto y recalcula el total de la orden.
 function eliminarServicioDetalle(data) {
   const lock = LockService.getScriptLock();
-  lock.tryLock(10000);
+  if (!lock.tryLock(10000)) throw new Error("Sistema ocupado, reintente");
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = getSheetTolerant(ss, "DetalleServicios");
@@ -609,7 +645,7 @@ function borrarFilasPorColumna(sheet, colIndex1based, valor) {
 // Elimina una orden y en cascada sus detalles y sus fotos (evita huérfanos).
 function eliminarOrdenCascada(ordenId) {
   const lock = LockService.getScriptLock();
-  lock.tryLock(10000);
+  if (!lock.tryLock(10000)) throw new Error("Sistema ocupado, reintente");
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     borrarPorColumna(getSheetTolerant(ss, "DetalleServicios"), 2, ordenId); // col ordenId

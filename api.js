@@ -41,7 +41,10 @@ const API = {
       } catch (err) { console.warn("Fallo en login de nube. Intentando validación local:", err); }
     }
     if (usuario === "prosario" && clave === "tallerelvaron") {
-      const data = { token: "TOKEN_LOCAL_PABLO_ROSARIO", usuario: "Pablo Rosario", taller: "Taller Pablo Rosario - El Varón (Modo Local)" };
+      // Conserva el token real del servidor (si ya se inició sesión en línea antes),
+      // para que la sincronización siga autorizada al reconectar.
+      const prev = localStorage.getItem(CONFIG.TOKEN_KEY);
+      const data = { token: prev || "TOKEN_LOCAL_PABLO_ROSARIO", usuario: "Pablo Rosario", taller: "Taller Pablo Rosario - El Varón (Modo Local)" };
       localStorage.setItem(CONFIG.TOKEN_KEY, data.token);
       localStorage.setItem(CONFIG.USER_KEY, JSON.stringify(data));
       return data;

@@ -10,12 +10,13 @@
     {
       "src": "assets/icon-512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
   "start_url": "./index.html",
-  "background_color": "#0b132b",
-  "theme_color": "#0b132b",
+  "background_color": "#002D62",
+  "theme_color": "#002D62",
   "display": "standalone",
   "orientation": "portrait"
 }

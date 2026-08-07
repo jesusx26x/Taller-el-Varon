@@ -8,8 +8,10 @@ Sistema web responsivo para **Pablo Rosario** (Taller Pablo Rosario - El Varón,
 
 ## 🔑 Credenciales de Acceso
 
-- **Usuario**: `prosario`
-- **Contraseña**: `tallerelvaron`
+- El usuario y la contraseña se configuran en el backend (Google Apps Script) mediante
+  **Propiedades del script** (`CRED_USER`, `CRED_PASS`). No se publican aquí por seguridad.
+  Por defecto (si no se configuran) el sistema usa credenciales de respaldo que **debes cambiar**
+  antes de entregar (ver "Seguridad" más abajo).
 
 ---
 
@@ -67,7 +69,7 @@ Para sincronizar datos en tiempo real entre la PC y el teléfono de Pablo:
 
 5. **Conectar en el Sistema**:
    - Abre la web pública: [https://jesusx26x.github.io/Taller-el-Varon/](https://jesusx26x.github.io/Taller-el-Varon/)
-   - Inicia sesión con `prosario` / `tallerelvaron`.
+   - Inicia sesión con el usuario y la contraseña que configuraste en Propiedades del script.
    - En la barra superior, haz clic en **Conexión / Cloud**.
    - Pega la URL de Apps Script y haz clic en **Guardar Conexión**.
 
@@ -91,3 +93,31 @@ Ordenes, DetalleServicios, Fotos):
 
 Recuerda: tras cambiar el código del backend, vuelve a pegar `google_apps_script.js` en
 Apps Script y crea un **despliegue (versión) nuevo**.
+
+
+---
+
+## 🔒 Seguridad (obligatorio antes de entregar a producción)
+
+Este sistema es una página pública (GitHub Pages) que habla con un backend de Google Apps Script.
+Para que sea seguro:
+
+1. **Token del API (protege el backend):** el backend exige un token en cada operación. Se genera
+   solo la primera vez y se guarda en **Propiedades del script**. El cliente lo obtiene al iniciar
+   sesión. Así, aunque alguien conozca la URL `/exec`, **no puede leer ni escribir sin iniciar sesión**.
+2. **Credenciales fuera del código:** define `CRED_USER` y `CRED_PASS` en
+   **Apps Script → Configuración del proyecto → Propiedades del script**. Cambia la contraseña por
+   una robusta. (Si no las defines, se usan unas de respaldo que NO debes dejar en producción.)
+3. **Conexión del cliente:** la app **no** trae ninguna URL por defecto. En el primer uso, toca el
+   indicador del encabezado ("Configurar conexión") y pega la URL de **tu** despliegue de Apps Script.
+   Hazlo en cada dispositivo (PC y celular).
+4. **Rotar despliegues de prueba:** si usaste un despliegue anterior, crea uno nuevo (nueva versión) y
+   descarta el viejo.
+5. **Fotos en Drive:** configura `DRIVE_FOLDER_ID` (una carpeta dedicada) en `google_apps_script.js`.
+   Las fotos se comparten como "cualquiera con el enlace" para poder mostrarse; tenlo en cuenta.
+6. **Datos personales:** el sistema guarda nombre/teléfono/cédula de clientes. El acceso queda
+   protegido por el token; aun así, cuida quién tiene la contraseña y el token.
+
+### Columnas recomendadas en las 5 hojas (para sincronización robusta)
+`uuid, createdAt, updatedAt, deleted, deletedAt` — habilitan borrado lógico (tombstones) y descarga
+incremental (delta). El backend funciona con o sin ellas.

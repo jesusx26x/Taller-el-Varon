@@ -60,26 +60,55 @@ function actualizarBadgeSync(detail) {
   if (!badge) return;
   const d = detail || {};
   badge.style.cursor = "pointer";
-  let html, title;
+  let html, title, onClick;
   if (!d.cloud) {
-    html = '<i class="fas fa-hard-drive" style="color:#64748B;"></i> Modo local';
-    title = "Trabajando solo en este dispositivo (sin nube configurada).";
+    html = '<i class="fas fa-plug" style="color:#F59E0B;"></i> Configurar conexión';
+    title = "Toca para pegar la URL de tu Google Apps Script y activar la nube.";
+    onClick = configurarConexion;
   } else if (!d.online) {
     html = '<i class="fas fa-wifi-slash" style="color:#EF4444;"></i> Sin conexión' + (d.pending ? ' (' + d.pending + ')' : '');
     title = "Sin internet. Tus cambios se guardan y se subirán solos al reconectar.";
+    onClick = () => reconciliarPronto(0);
+  } else if (d.errored > 0) {
+    html = '<i class="fas fa-triangle-exclamation" style="color:#EF4444;"></i> ' + d.errored + ' con error';
+    title = "Algunos cambios no se pudieron subir. Toca para reintentar.";
+    onClick = reintentarErrores;
   } else if (d.syncing) {
     html = '<i class="fas fa-rotate fa-spin" style="color:#F59E0B;"></i> Sincronizando…';
     title = "Subiendo cambios pendientes…";
+    onClick = () => {};
   } else if (d.pending > 0) {
     html = '<i class="fas fa-cloud-arrow-up" style="color:#F59E0B;"></i> ' + d.pending + ' por subir';
     title = "Hay cambios pendientes de subir. Toca para sincronizar ahora.";
+    onClick = () => { API.sync(); reconciliarPronto(0); };
   } else {
     html = '<i class="fas fa-wifi" style="color:#10B981;"></i> Nube sincronizada';
     title = "Todo sincronizado" + (d.ms ? " · última sync " + d.ms + " ms" : "") + ". Toca para volver a sincronizar.";
+    onClick = () => { API.sync(); reconciliarPronto(0); };
   }
   badge.innerHTML = html;
   badge.title = title;
-  badge.onclick = () => { if (window.API && API.sync) { API.sync(); reconciliarPronto(0); } };
+  badge.onclick = onClick;
+}
+
+// Configurar la conexión a la nube (pegar la URL del Apps Script). Sin URL => modo local.
+function configurarConexion() {
+  const actual = (window.API && API.getApiUrl) ? API.getApiUrl() : "";
+  const url = window.prompt("Pega la URL de tu aplicación web de Google Apps Script (termina en /exec):", actual || "");
+  if (url === null) return;
+  API.setApiUrl(url.trim());
+  if (url.trim()) UTILS.showToast("Conexión guardada. Inicia sesión para sincronizar.");
+  cargarDatosYRenderizar();
+}
+
+// Reintentar las operaciones que quedaron marcadas con error.
+function reintentarErrores() {
+  if (window.STORE && STORE.outbox) {
+    STORE.outbox().forEach(o => { o.error = false; o.tries = 0; });
+    if (STORE.persist) STORE.persist();
+  }
+  UTILS.showToast("Reintentando subir cambios…", "info");
+  API.sync(); reconciliarPronto(0);
 }
 
 let _primeraCarga = true;
@@ -213,30 +242,32 @@ function renderDashboard() {
   const clientes = STATE.db.clientes || [];
   const vehiculos = STATE.db.vehiculos || [];
 
-  const todayStr = new Date().toISOString().split("T")[0];
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
+  const _now = new Date();
+  const _p2 = (n) => String(n).padStart(2, "0");
+  const todayStr = `${_now.getFullYear()}-${_p2(_now.getMonth() + 1)}-${_p2(_now.getDate())}`; // fecha LOCAL (RD)
+  const currentMonth = _now.getMonth();
+  const currentYear = _now.getFullYear();
+  const ENTREGADO = UTILS.ESTADOS_ORDEN.ENTREGADO;
+  // Convierte una fecha ISO/valor a "YYYY-MM-DD" en hora local.
+  const _localDate = (v) => { if (!v) return ""; const d = new Date(v); return isNaN(d.getTime()) ? String(v).slice(0, 10) : `${d.getFullYear()}-${_p2(d.getMonth() + 1)}-${_p2(d.getDate())}`; };
 
   // 1. Vehículos en taller hoy (Pendiente o En Proceso)
   const enTaller = ordenes.filter(o => o.estado === UTILS.ESTADOS_ORDEN.PENDIENTE || o.estado === UTILS.ESTADOS_ORDEN.EN_PROCESO).length;
 
-  // 2. Ingresados Hoy
-  const ingresadosHoy = ordenes.filter(o => {
-    const dateStr = String(o.fechaIngreso || '');
-    return dateStr.startsWith(todayStr);
-  }).length;
+  // 2. Ingresados Hoy (por fecha de ingreso, hora local)
+  const ingresadosHoy = ordenes.filter(o => _localDate(o.fechaIngreso) === todayStr).length;
 
-  // 3. Total Cobrado Hoy
+  // 3. Total Cobrado Hoy = órdenes ENTREGADAS hoy (por fecha de entrega, hora local)
   const cobradoHoy = ordenes
-    .filter(o => String(o.fechaIngreso || '').startsWith(todayStr))
+    .filter(o => o.estado === ENTREGADO && _localDate(o.fechaEntrega) === todayStr)
     .reduce((sum, o) => sum + (Number(o.montoTotal) || 0), 0);
 
-  // 4. Total Cobrado Mes
+  // 4. Total Cobrado Mes = órdenes ENTREGADAS este mes (por fecha de entrega)
   const cobradoMes = ordenes
     .filter(o => {
-      if (!o.fechaIngreso) return false;
-      const d = new Date(o.fechaIngreso);
-      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      if (o.estado !== ENTREGADO || !o.fechaEntrega) return false;
+      const d = new Date(o.fechaEntrega);
+      return !isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     })
     .reduce((sum, o) => sum + (Number(o.montoTotal) || 0), 0);
 
@@ -261,6 +292,7 @@ function renderDashboard() {
         </td>
       </tr>
     `;
+    { const _mc = document.getElementById("mobile-dashboard-ordenes"); if (_mc) _mc.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:2rem;">No hay órdenes registradas. Presiona “+ Nuevo Ingreso de Vehículo”.</div>`; }
     return;
   }
 
@@ -355,7 +387,7 @@ function ejecutarBusquedaGlobal() {
   let html = `<div style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; box-shadow: var(--shadow-card);">`;
 
   if (matchClientes.length === 0 && matchVehiculos.length === 0 && matchOrdenes.length === 0) {
-    html += `<p style="color: var(--text-muted); font-size: 0.9rem;">Sin resultados para "${query}".</p>`;
+    html += `<p style="color: var(--text-muted); font-size: 0.9rem;">Sin resultados para "${UTILS.escapeHtml(query)}".</p>`;
   } else {
     if (matchClientes.length > 0) {
       html += `<h4 style="font-size: 0.85rem; color: var(--color-primary); margin-bottom: 0.5rem;"><i class="fas fa-users"></i> Clientes (${matchClientes.length}):</h4>`;
@@ -431,6 +463,7 @@ function renderListaOrdenes() {
         </td>
       </tr>
     `;
+    { const _mc = document.getElementById("mobile-lista-ordenes"); if (_mc) _mc.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:2rem;">No se encontraron órdenes de trabajo.</div>`; }
     return;
   }
 
@@ -514,6 +547,7 @@ function renderListaClientes() {
         </td>
       </tr>
     `;
+    { const _mc = document.getElementById("mobile-lista-clientes"); if (_mc) _mc.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:2rem;">No hay clientes registrados. Presiona “+ Nuevo Cliente”.</div>`; }
     return;
   }
 
@@ -606,6 +640,7 @@ function renderListaVehiculos() {
         </td>
       </tr>
     `;
+    { const _mc = document.getElementById("mobile-lista-vehiculos"); if (_mc) _mc.innerHTML = `<div style="text-align:center;color:var(--text-muted);padding:2rem;">No hay vehículos registrados. Presiona “+ Nuevo Vehículo”.</div>`; }
     return;
   }
 
@@ -876,8 +911,8 @@ function renderOrdenDetalle(ordenId) {
 
           <div style="background: #F8F9FA; padding: 1.1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.25rem;">
             <p style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px;">Motivo de Ingreso / Síntomas:</p>
-            <p style="color: var(--text-main); font-size: 1.05rem; font-weight: 500; margin-top: 0.3rem;">${ord.motivoVisita || 'N/D'}</p>
-            ${ord.diagnostico ? `<div style="margin-top: 0.8rem; padding-top: 0.6rem; border-top: 1px dashed #CBD5E1;"><p style="font-size: 0.85rem; color: var(--color-secondary); font-weight: 600;"><i class="fas fa-stethoscope"></i> Diagnóstico Técnico:</p><p style="color: var(--text-main); font-size: 0.95rem; margin-top: 0.2rem;">${ord.diagnostico}</p></div>` : ''}
+            <p style="color: var(--text-main); font-size: 1.05rem; font-weight: 500; margin-top: 0.3rem;">${UTILS.escapeHtml(ord.motivoVisita) || 'N/D'}</p>
+            ${ord.diagnostico ? `<div style="margin-top: 0.8rem; padding-top: 0.6rem; border-top: 1px dashed #CBD5E1;"><p style="font-size: 0.85rem; color: var(--color-secondary); font-weight: 600;"><i class="fas fa-stethoscope"></i> Diagnóstico Técnico:</p><p style="color: var(--text-main); font-size: 0.95rem; margin-top: 0.2rem;">${UTILS.escapeHtml(ord.diagnostico)}</p></div>` : ''}
           </div>
 
           <!-- ENCABEZADO Y BOTÓN AÑADIR ÍTEM -->

@@ -300,7 +300,7 @@ UTILS.folioOrden = function () {
   const d = new Date();
   const p = (n) => String(n).padStart(2, "0");
   const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
-  const rand = Math.random().toString(36).slice(2, 5).toUpperCase();
+  const rand = (Math.random().toString(36).slice(2, 7) + Math.random().toString(36).slice(2, 4)).toUpperCase();
   return `ORD-${stamp}-${rand}`;
 };
 

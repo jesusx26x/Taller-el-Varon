@@ -5,19 +5,20 @@
  * - Las llamadas al backend (POST a Apps Script) NO se interceptan: sin conexión
  *   las maneja la cola offline (Outbox) de la app.
  */
-const CACHE = "tev-cache-v6-2";
+const CACHE = "tev-cache-v6-3";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./index.css?v=6.2",
+  "./index.css?v=6.3",
   "./manifest.json",
-  "./utils.js?v=6.2",
-  "./store.js?v=6.2",
-  "./sync.js?v=6.2",
-  "./api.js?v=6.2",
-  "./print.js?v=6.2",
-  "./app.js?v=6.2",
+  "./utils.js?v=6.3",
+  "./store.js?v=6.3",
+  "./sync.js?v=6.3",
+  "./api.js?v=6.3",
+  "./print.js?v=6.3",
+  "./app.js?v=6.3",
   "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css",
   "./assets/icon-192.png",
   "./assets/icon-512.png"
 ];
@@ -29,8 +30,10 @@ self.addEventListener("install", (event) => {
     // Cachea cada recurso de forma tolerante: un fallo individual no aborta la instalación.
     await Promise.all(APP_SHELL.map(async (url) => {
       try {
-        const r = await fetch(url, { cache: "no-cache" });
-        if (r && r.ok) await cache.put(url, r.clone());
+        const cross = /^https?:\/\//.test(url);
+        const req = new Request(url, { mode: cross ? "no-cors" : "same-origin", cache: "no-cache" });
+        const r = await fetch(req);
+        if (r && (r.ok || r.type === "opaque")) await cache.put(url, r.clone());
       } catch (e) { /* recurso opcional o sin red durante la instalación */ }
     }));
     await self.skipWaiting();

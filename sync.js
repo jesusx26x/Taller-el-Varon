@@ -19,7 +19,7 @@ function _cloud() { return CONFIG.API_URL && CONFIG.API_URL.trim() !== ""; }
 function emit() {
   try {
     window.dispatchEvent(new CustomEvent("taller-sync", {
-      detail: { online: _online(), cloud: _cloud(), pending: STORE.outbox().length, syncing: SYNCING, ms: _lastMs }
+      detail: { online: _online(), cloud: _cloud(), pending: STORE.outbox().length, syncing: SYNCING, ms: _lastMs, errored: STORE.outbox().filter(function (o) { return o.error; }).length }
     }));
   } catch (e) { /* sin window/CustomEvent */ }
 }
@@ -72,8 +72,9 @@ async function flush() {
           q.splice(i, 1);
         } else if (r && r.status === "error") {
           op.tries = (op.tries || 0) + 1;
+          op.lastError = r.message || "error";
           console.warn("El servidor rechazó una operación:", op.action, r.message);
-          if (op.tries >= 5) q.splice(i, 1);
+          if (op.tries >= 5) op.error = true; // NO se descarta: se conserva y se avisa en la UI
         }
       }
       STORE.persist(); _backoff = 0; _lastMs = Date.now() - _t0;
@@ -89,7 +90,8 @@ async function flush() {
 
 // Respaldo: envía la cola de a una operación (backend antiguo).
 async function _flushPorOperacion(q) {
-  while (q.length > 0) {
+  let intentos = q.length; // guarda: no repetir indefinidamente en un mismo flush
+  while (q.length > 0 && intentos-- > 0) {
     const op = q[0];
     let json;
     try {
@@ -103,7 +105,8 @@ async function _flushPorOperacion(q) {
       q.shift(); STORE.persist(); _backoff = 0;
     } else {
       op.tries = (op.tries || 0) + 1;
-      if (op.tries >= 5) { q.shift(); STORE.persist(); }
+      op.lastError = (json && json.message) || "error";
+      if (op.tries >= 5) { op.error = true; q.push(q.shift()); STORE.persist(); } // conserva y rota (no se pierde)
       else { STORE.persist(); scheduleRetry(); break; }
     }
   }

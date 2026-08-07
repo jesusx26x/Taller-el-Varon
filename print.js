@@ -112,7 +112,7 @@ const PRINT_MODULE = {
     }
 
     // Rutas absolutas para que los estilos e íconos carguen dentro del iframe
-    const cssHref = new URL("index.css?v=6.1", location.href).href;
+    const cssHref = new URL("index.css?v=6.3", location.href).href;
     const faHref = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css";
 
     const doc = `<!DOCTYPE html>
@@ -174,7 +174,7 @@ const PRINT_MODULE = {
     const itemsRows = detalles.length > 0 ? detalles.map((item, idx) => `
       <tr>
         <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
-        <td><strong>${item.descripcion}</strong></td>
+        <td><strong>${UTILS.escapeHtml(item.descripcion)}</strong></td>
         <td style="text-align: center;"><span class="badge ${item.tipo === 'Repuesto' ? 'badge-pending' : 'badge-process'}">${item.tipo}</span></td>
         <td style="text-align: center;" class="tabular-nums">${item.cantidad}</td>
         <td style="text-align: right;" class="tabular-nums">${UTILS.formatMoney(item.precioUnitario)}</td>
@@ -228,15 +228,15 @@ const PRINT_MODULE = {
         <div class="receipt-grid">
           <div class="receipt-box">
             <h3><i class="fas fa-user"></i> DATOS DEL CLIENTE</h3>
-            <p><strong>Nombre:</strong> ${cli.nombre || 'Desconocido'}</p>
-            <p><strong>Teléfono / WhatsApp:</strong> ${cli.telefono || 'N/D'}</p>
-            <p><strong>Cédula / Identificación:</strong> ${cli.cedula || 'N/D'}</p>
+            <p><strong>Nombre:</strong> ${UTILS.escapeHtml(cli.nombre) || 'Desconocido'}</p>
+            <p><strong>Teléfono / WhatsApp:</strong> ${UTILS.escapeHtml(cli.telefono) || 'N/D'}</p>
+            <p><strong>Cédula / Identificación:</strong> ${UTILS.escapeHtml(cli.cedula) || 'N/D'}</p>
           </div>
 
           <div class="receipt-box">
             <h3><i class="fas fa-car"></i> DATOS DEL VEHÍCULO</h3>
-            <p><strong>Vehículo:</strong> ${veh.marca || ''} ${veh.modelo || ''} ${veh.año ? '(' + veh.año + ')' : ''}</p>
-            <p><strong>Placa:</strong> <span class="license-plate-tag">${veh.placa || 'SIN PLACA'}</span> | <strong>Color:</strong> ${veh.color || 'N/D'}</p>
+            <p><strong>Vehículo:</strong> ${UTILS.escapeHtml(veh.marca) || ''} ${UTILS.escapeHtml(veh.modelo) || ''} ${veh.año ? '(' + veh.año + ')' : ''}</p>
+            <p><strong>Placa:</strong> <span class="license-plate-tag">${UTILS.escapeHtml(veh.placa) || 'SIN PLACA'}</span> | <strong>Color:</strong> ${UTILS.escapeHtml(veh.color) || 'N/D'}</p>
             <p><strong>Km Entrada:</strong> ${kmEntrada} | <strong>Estado:</strong> <strong>${ord.estado}</strong></p>
           </div>
         </div>
@@ -245,8 +245,8 @@ const PRINT_MODULE = {
         <div class="receipt-section">
           <h4><i class="fas fa-wrench"></i> MOTIVO DE INGRESO & DIAGNÓSTICO TÉCNICO</h4>
           <div class="receipt-text-box">
-            <p><strong>Síntomas reportados:</strong> ${ord.motivoVisita || 'Mantenimiento preventivo / Diagnóstico general'}</p>
-            ${ord.diagnostico ? `<p style="margin-top: 0.4rem; color: #0A4A8F;"><strong>Diagnóstico Técnico:</strong> ${ord.diagnostico}</p>` : ''}
+            <p><strong>Síntomas reportados:</strong> ${UTILS.escapeHtml(ord.motivoVisita) || 'Mantenimiento preventivo / Diagnóstico general'}</p>
+            ${ord.diagnostico ? `<p style="margin-top: 0.4rem; color: #0A4A8F;"><strong>Diagnóstico Técnico:</strong> ${UTILS.escapeHtml(ord.diagnostico)}</p>` : ''}
           </div>
         </div>
 
