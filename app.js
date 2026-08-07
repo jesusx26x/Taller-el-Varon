@@ -5,7 +5,8 @@
 let STATE = {
   db: null,
   currentView: "dashboard",
-  selectedOrdenId: null
+  selectedOrdenId: null,
+  filterVehiculoId: null   // filtro de historial por vehículo (por ID, no por texto)
 };
 
 // Catálogo de Marcas y Modelos del mercado dominicano (sugiere opciones manteniendo libertad de escritura manual)
@@ -53,7 +54,56 @@ function checkAuthStatus() {
   }
 }
 
+// FASE 3-4: indicador de estado de sincronización en el header (badge existente).
+function actualizarBadgeSync(detail) {
+  const badge = document.getElementById("cloud-status-badge");
+  if (!badge) return;
+  const d = detail || {};
+  badge.style.cursor = "pointer";
+  let html, title;
+  if (!d.cloud) {
+    html = '<i class="fas fa-hard-drive" style="color:#64748B;"></i> Modo local';
+    title = "Trabajando solo en este dispositivo (sin nube configurada).";
+  } else if (!d.online) {
+    html = '<i class="fas fa-wifi-slash" style="color:#EF4444;"></i> Sin conexión' + (d.pending ? ' (' + d.pending + ')' : '');
+    title = "Sin internet. Tus cambios se guardan y se subirán solos al reconectar.";
+  } else if (d.syncing) {
+    html = '<i class="fas fa-rotate fa-spin" style="color:#F59E0B;"></i> Sincronizando…';
+    title = "Subiendo cambios pendientes…";
+  } else if (d.pending > 0) {
+    html = '<i class="fas fa-cloud-arrow-up" style="color:#F59E0B;"></i> ' + d.pending + ' por subir';
+    title = "Hay cambios pendientes de subir. Toca para sincronizar ahora.";
+  } else {
+    html = '<i class="fas fa-wifi" style="color:#10B981;"></i> Nube sincronizada';
+    title = "Todo sincronizado. Toca para volver a sincronizar.";
+  }
+  badge.innerHTML = html;
+  badge.title = title;
+  badge.onclick = () => { if (window.API && API.sync) { API.sync(); cargarDatosYRenderizar(); } };
+}
+
+let _primeraCarga = true;
+
+// FASE 5: overlay de carga (solo en la primera carga, para no parpadear en cada refresco).
+function mostrarCargando(v) {
+  let el = document.getElementById("app-loading-overlay");
+  if (v) {
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "app-loading-overlay";
+      el.style.cssText = "position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;background:rgba(248,249,250,0.75);";
+      el.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:0.6rem;color:var(--color-primary);font-weight:600;"><i class="fas fa-spinner fa-spin" style="font-size:1.9rem;"></i><span>Cargando…</span></div>';
+      document.body.appendChild(el);
+    }
+    el.style.display = "flex";
+  } else if (el) {
+    el.style.display = "none";
+  }
+}
+
 async function cargarDatosYRenderizar() {
+  const first = _primeraCarga;
+  if (first) mostrarCargando(true);
   try {
     STATE.db = await API.obtenerTodo();
     if (!STATE.db) {
@@ -64,6 +114,8 @@ async function cargarDatosYRenderizar() {
     console.error("Error al cargar datos:", err);
     STATE.db = API.getLocalStore();
     renderCurrentView();
+  } finally {
+    if (first) { mostrarCargando(false); _primeraCarga = false; }
   }
 }
 
@@ -287,7 +339,7 @@ function ejecutarBusquedaGlobal() {
       html += matchClientes.map(c => `
         <div style="padding: 0.4rem 0.6rem; border-bottom: 1px solid #f0f0f0; font-size: 0.88rem; display: flex; justify-content: space-between; align-items: center;">
           <span><strong>${c.nombre}</strong> (${c.telefono || 'Sin tel'})</span>
-          <a href="#clientes" onclick="document.getElementById('search-clientes').value='${c.nombre}'; renderListaClientes();" class="btn btn-secondary btn-sm">Ver Cliente</a>
+          <button class="btn btn-secondary btn-sm" onclick="irACliente('${c.id}')">Ver Cliente</button>
         </div>
       `).join("");
     }
@@ -306,7 +358,7 @@ function ejecutarBusquedaGlobal() {
       html += `<h4 style="font-size: 0.85rem; color: var(--color-primary); margin-top: 0.8rem; margin-bottom: 0.5rem;"><i class="fas fa-file-invoice"></i> Órdenes (${matchOrdenes.length}):</h4>`;
       html += matchOrdenes.map(o => `
         <div style="padding: 0.4rem 0.6rem; border-bottom: 1px solid #f0f0f0; font-size: 0.88rem; display: flex; justify-content: space-between; align-items: center;">
-          <span><strong>Órden ${o.id}</strong> [${o.estado}] - ${o.motivoVisita}</span>
+          <span><strong>Orden ${o.id}</strong> [${o.estado}] - ${o.motivoVisita}</span>
           <a href="#orden-detalle/${o.id}" class="btn btn-secondary btn-sm">Abrir Orden</a>
         </div>
       `).join("");
@@ -336,15 +388,16 @@ function renderListaOrdenes() {
     const cli = clientes.find(c => String(c.id) === String(ord.clienteId)) || {};
     const veh = vehiculos.find(v => String(v.id) === String(ord.vehiculoId)) || {};
 
+    const matchVeh = !STATE.filterVehiculoId || String(ord.vehiculoId) === String(STATE.filterVehiculoId);
     const matchState = estadoFilter === "TODOS" || ord.estado === estadoFilter;
-    const matchSearch = !query || 
+    const matchSearch = !query ||
       String(ord.id || '').toLowerCase().includes(query) ||
       String(cli.nombre || '').toLowerCase().includes(query) ||
       String(veh.placa || '').toLowerCase().includes(query) ||
       String(veh.marca || '').toLowerCase().includes(query) ||
       String(veh.modelo || '').toLowerCase().includes(query);
 
-    return matchState && matchSearch;
+    return matchVeh && matchState && matchSearch;
   });
 
   if (filtradas.length === 0) {
@@ -447,7 +500,7 @@ function renderListaClientes() {
       ? vehs.map(v => `<span class="badge badge-process" style="margin-right: 0.3rem;">${v.marca} ${v.modelo} (${v.placa || 'S/P'})</span>`).join(" ")
       : `<span style="color: var(--text-muted); font-size: 0.8rem;">Sin vehículos</span>`;
 
-    const telClean = String(c.telefono || '').replace(/\D/g, '');
+    const telClean = UTILS.formatWhatsApp(c.telefono);
 
     return `
       <tr>
@@ -457,8 +510,10 @@ function renderListaClientes() {
         <td>${c.cedula || 'N/A'}</td>
         <td>${listaVehsHtml}</td>
         <td>${UTILS.formatDate(c.fechaRegistro)}</td>
-        <td>
-          <button class="btn btn-secondary btn-sm" onclick="abrirModalNuevoVehiculoParaCliente('${c.id}')"><i class="fas fa-plus"></i> Añadir Vehículo</button>
+        <td style="white-space: nowrap;">
+          <button class="btn btn-secondary btn-sm" title="Añadir vehículo" onclick="abrirModalNuevoVehiculoParaCliente('${c.id}')"><i class="fas fa-plus"></i></button>
+          <button class="btn btn-secondary btn-sm" title="Editar cliente" onclick="abrirModalEditarCliente('${c.id}')"><i class="fas fa-pen"></i></button>
+          <button class="btn btn-sm" title="Eliminar cliente" style="background: var(--color-accent-red); color: #fff;" onclick="eliminarClienteUI('${c.id}')"><i class="fas fa-trash"></i></button>
         </td>
       </tr>
     `;
@@ -474,7 +529,7 @@ function renderListaClientes() {
         const listaVehsHtml = vehs.length > 0 
           ? vehs.map(v => `<span class="badge badge-process" style="margin-right: 0.3rem;">${v.marca} ${v.modelo} (${v.placa || 'S/P'})</span>`).join(" ")
           : `<span style="color: var(--text-muted); font-size: 0.8rem;">Sin vehículos</span>`;
-        const telClean = String(c.telefono || '').replace(/\D/g, '');
+        const telClean = UTILS.formatWhatsApp(c.telefono);
 
         return `
           <div class="mobile-card-item">
@@ -487,9 +542,10 @@ function renderListaClientes() {
               ${c.cedula ? `<div><span class="card-label">Cédula:</span> ${c.cedula}</div>` : ''}
               <div><span class="card-label">Vehículos:</span> ${listaVehsHtml}</div>
             </div>
-            <div class="mobile-card-footer">
-              <span style="font-size: 0.78rem; color: var(--text-muted);">Registro: ${UTILS.formatDate(c.fechaRegistro)}</span>
-              <button class="btn btn-secondary btn-sm" onclick="abrirModalNuevoVehiculoParaCliente('${c.id}')"><i class="fas fa-plus"></i> Añadir Vehículo</button>
+            <div class="mobile-card-footer" style="gap: 0.4rem; flex-wrap: wrap;">
+              <button class="btn btn-secondary btn-sm" onclick="abrirModalNuevoVehiculoParaCliente('${c.id}')"><i class="fas fa-plus"></i> Vehículo</button>
+              <button class="btn btn-secondary btn-sm" onclick="abrirModalEditarCliente('${c.id}')"><i class="fas fa-pen"></i> Editar</button>
+              <button class="btn btn-sm" style="background: var(--color-accent-red); color: #fff;" onclick="eliminarClienteUI('${c.id}')"><i class="fas fa-trash"></i></button>
             </div>
           </div>
         `;
@@ -542,8 +598,10 @@ function renderListaVehiculos() {
         <td>${v.color}</td>
         <td>${cli.nombre}</td>
         <td><span class="badge badge-pending">${historialOrdenes.length} visita(s)</span></td>
-        <td>
-          <button class="btn btn-secondary btn-sm" onclick="verHistorialVehiculo('${v.id}')"><i class="fas fa-history"></i> Ver Historial</button>
+        <td style="white-space: nowrap;">
+          <button class="btn btn-secondary btn-sm" title="Ver historial" onclick="verHistorialVehiculo('${v.id}')"><i class="fas fa-history"></i></button>
+          <button class="btn btn-secondary btn-sm" title="Editar vehículo" onclick="abrirModalEditarVehiculo('${v.id}')"><i class="fas fa-pen"></i></button>
+          <button class="btn btn-sm" title="Eliminar vehículo" style="background: var(--color-accent-red); color: #fff;" onclick="eliminarVehiculoUI('${v.id}')"><i class="fas fa-trash"></i></button>
         </td>
       </tr>
     `;
@@ -571,8 +629,10 @@ function renderListaVehiculos() {
               <div><span class="card-label">Propietario:</span> ${cli.nombre}</div>
               <div><span class="card-label">Color:</span> ${v.color || 'N/D'}</div>
             </div>
-            <div class="mobile-card-footer">
-              <button class="btn btn-secondary btn-sm" style="width: 100%;" onclick="verHistorialVehiculo('${v.id}')"><i class="fas fa-history"></i> Ver Historial</button>
+            <div class="mobile-card-footer" style="gap: 0.4rem; flex-wrap: wrap;">
+              <button class="btn btn-secondary btn-sm" onclick="verHistorialVehiculo('${v.id}')"><i class="fas fa-history"></i> Historial</button>
+              <button class="btn btn-secondary btn-sm" onclick="abrirModalEditarVehiculo('${v.id}')"><i class="fas fa-pen"></i> Editar</button>
+              <button class="btn btn-sm" style="background: var(--color-accent-red); color: #fff;" onclick="eliminarVehiculoUI('${v.id}')"><i class="fas fa-trash"></i></button>
             </div>
           </div>
         `;
@@ -585,19 +645,51 @@ function verHistorialVehiculo(vehiculoId) {
   const veh = (STATE.db.vehiculos || []).find(v => String(v.id) === String(vehiculoId));
   if (!veh) return;
 
+  // Filtra por ID de vehículo (no por texto): evita traer órdenes de otros
+  // vehículos con la misma marca/modelo o sin placa.
+  STATE.filterVehiculoId = vehiculoId;
+  const searchInput = document.getElementById("search-ordenes");
+  if (searchInput) searchInput.value = "";
+  ocultarBusquedaGlobal();
   window.location.hash = "ordenes";
-  setTimeout(() => {
-    const searchInput = document.getElementById("search-ordenes");
-    if (searchInput) {
-      searchInput.value = veh.placa || veh.marca + " " + veh.modelo;
-      renderListaOrdenes();
-      UTILS.showToast(`Mostrando historial de ${veh.marca} ${veh.modelo} (${veh.placa || 'S/P'})`, "info");
-    }
-  }, 100);
+  renderListaOrdenes();
+  UTILS.showToast(`Mostrando historial de ${veh.marca} ${veh.modelo} (${veh.placa || 'S/P'})`, "info");
+}
+
+// Navega a la ficha del cliente desde la búsqueda global, sin inyectar el
+// nombre en HTML (evita que apóstrofos como en "D'Oleo" rompan el botón).
+function irACliente(clienteId) {
+  const cli = (STATE.db.clientes || []).find(c => String(c.id) === String(clienteId));
+  ocultarBusquedaGlobal();
+  window.location.hash = "clientes";
+  const searchInput = document.getElementById("search-clientes");
+  if (searchInput) searchInput.value = cli ? (cli.nombre || "") : "";
+  renderListaClientes();
+}
+
+// Oculta y limpia el panel de resultados de la búsqueda global.
+function ocultarBusquedaGlobal() {
+  const container = document.getElementById("global-search-results");
+  const input = document.getElementById("global-search-input");
+  if (container) { container.style.display = "none"; container.innerHTML = ""; }
+  if (input) input.value = "";
+}
+
+// Valida que el archivo sea una imagen y no exceda el tamaño máximo.
+function validarArchivoImagen(file, maxMB = 12) {
+  if (!file.type || !file.type.startsWith("image/")) {
+    UTILS.showToast("El archivo debe ser una imagen (JPG, PNG o WebP).", "warning");
+    return false;
+  }
+  if (file.size > maxMB * 1024 * 1024) {
+    UTILS.showToast(`La imagen supera el máximo de ${maxMB} MB.`, "warning");
+    return false;
+  }
+  return true;
 }
 
 // -------------------------------------------------------------
-// VISTA: DETALLE DE ÓRDEN
+// VISTA: DETALLE DE ORDEN
 // -------------------------------------------------------------
 function renderOrdenDetalle(ordenId) {
   const container = document.getElementById("orden-detalle-container");
@@ -620,7 +712,7 @@ function renderOrdenDetalle(ordenId) {
     container.innerHTML = `
       <div style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 3rem 1.5rem; text-align: center; margin-top: 1rem; box-shadow: var(--shadow-card);">
         <i class="fas fa-triangle-exclamation" style="font-size: 2.5rem; color: var(--color-accent-red); margin-bottom: 1rem;"></i>
-        <h3 style="color: var(--color-primary); margin-bottom: 0.5rem;">Órden no encontrada (ID: ${ordenId || 'N/D'})</h3>
+        <h3 style="color: var(--color-primary); margin-bottom: 0.5rem;">Orden no encontrada (ID: ${ordenId || 'N/D'})</h3>
         <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">La orden requerida no existe o fue eliminada.</p>
         <a href="#ordenes" class="btn btn-primary btn-sm"><i class="fas fa-arrow-left"></i> Ir a Lista de Órdenes</a>
       </div>
@@ -648,7 +740,7 @@ function renderOrdenDetalle(ordenId) {
   const detalles = (STATE.db.detalleServicios || []).filter(d => String(d.ordenId) === String(ord.id));
   const fotos = (STATE.db.fotos || []).filter(f => String(f.ordenId) === String(ord.id));
 
-  const telClean = cli.telefono.replace(/\D/g, "");
+  const telClean = UTILS.formatWhatsApp(cli.telefono);
   const kmVal = Number(ord.kilometrajeEntrada) || 0;
   const kmText = kmVal > 0 ? kmVal.toLocaleString("es-DO") + " km" : "N/D";
 
@@ -703,6 +795,10 @@ function renderOrdenDetalle(ordenId) {
       <td style="text-align: center;" class="tabular-nums">${item.cantidad}</td>
       <td style="text-align: right;" class="tabular-nums">${UTILS.formatMoney(item.precioUnitario)}</td>
       <td style="text-align: right; font-weight: bold; color: var(--color-accent-red);" class="tabular-nums">${UTILS.formatMoney(item.subtotal)}</td>
+      <td style="text-align: center; white-space: nowrap;" class="no-print">
+        <button class="btn btn-secondary btn-sm" title="Editar ítem" onclick="abrirModalEditarItem('${item.id}')"><i class="fas fa-pen"></i></button>
+        <button class="btn btn-sm" title="Eliminar ítem" style="background: var(--color-accent-red); color: #fff;" onclick="eliminarItemUI('${ord.id}','${item.id}')"><i class="fas fa-trash"></i></button>
+      </td>
     </tr>
   `).join("");
 
@@ -717,11 +813,14 @@ function renderOrdenDetalle(ordenId) {
         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-card);">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
             <div>
-              <h2 style="color: var(--color-primary); font-size: 1.4rem;">ÓRDEN DE TRABAJO #${ord.id}</h2>
+              <h2 style="color: var(--color-primary); font-size: 1.4rem;">ORDEN DE TRABAJO #${ord.id}</h2>
               <p style="color: var(--text-muted); font-size: 0.85rem;">Fecha Ingreso: ${UTILS.formatDate(ord.fechaIngreso, true)}</p>
             </div>
-            <div>
+            <div style="text-align: right;">
               ${UTILS.getStatusBadgeHtml(ord.estado)}
+              <div style="margin-top: 0.5rem;">
+                <button class="btn btn-sm" style="background: var(--color-accent-red); color: #fff;" onclick="eliminarOrdenUI('${ord.id}')"><i class="fas fa-trash"></i> Eliminar orden</button>
+              </div>
             </div>
           </div>
 
@@ -747,15 +846,17 @@ function renderOrdenDetalle(ordenId) {
                   <th style="text-align: center;">Cant</th>
                   <th style="text-align: right;">P. Unit</th>
                   <th style="text-align: right;">Subtotal</th>
+                  <th style="text-align: center; width: 90px;" class="no-print">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                ${detalles.length > 0 ? detallesHtml : '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem 1rem;">No se han agregado trabajos o repuestos a esta orden. Presione "+ Añadir Trabajo / Pieza".</td></tr>'}
+                ${detalles.length > 0 ? detallesHtml : '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem 1rem;">No se han agregado trabajos o repuestos a esta orden. Presione "+ Añadir Trabajo / Pieza".</td></tr>'}
               </tbody>
               <tfoot>
                 <tr style="background: rgba(206, 17, 38, 0.06); font-size: 1.1rem; font-weight: 700;">
                   <td colspan="5" style="text-align: right;">TOTAL A COBRAR (RD$):</td>
                   <td style="text-align: right; color: var(--color-accent-red);" class="tabular-nums">${UTILS.formatMoney(ord.montoTotal)}</td>
+                  <td class="no-print"></td>
                 </tr>
               </tfoot>
             </table>
@@ -806,6 +907,15 @@ function renderOrdenDetalle(ordenId) {
 }
 
 async function cambiarEstadoOrden(ordenId, nuevoEstado) {
+  // Confirmar el paso a "Entregado": registra fecha de entrega y cierra la orden.
+  if (nuevoEstado === "Entregado") {
+    const ok = await UTILS.confirmDialog({
+      title: "Marcar como Entregado",
+      message: "Se registrará la fecha y hora de entrega y la orden quedará cerrada. ¿Deseas continuar?",
+      confirmText: "Sí, entregar"
+    });
+    if (!ok) return;
+  }
   try {
     await API.actualizarEstadoOrden(ordenId, nuevoEstado);
     UTILS.showToast(`Estado actualizado a: ${nuevoEstado}`);
@@ -819,6 +929,25 @@ async function cambiarEstadoOrden(ordenId, nuevoEstado) {
 // EVENT LISTENERS & FORM HANDLERS
 // -------------------------------------------------------------
 function initEventListeners() {
+
+  // Indicador de sincronización (Fase 3-4)
+  window.addEventListener("taller-sync", (e) => actualizarBadgeSync(e.detail));
+
+  // FASE 5: cerrar los resultados de la búsqueda global al hacer clic fuera.
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#global-search-input") && !e.target.closest("#global-search-results")) {
+      const c = document.getElementById("global-search-results");
+      if (c) c.style.display = "none";
+    }
+  });
+  try {
+    actualizarBadgeSync({
+      cloud: API.isCloudMode(),
+      online: (typeof navigator !== "undefined") ? navigator.onLine : true,
+      pending: API.getPendingCount ? API.getPendingCount() : 0,
+      syncing: false
+    });
+  } catch (e) { /* noop */ }
 
   // Login
   document.getElementById("form-login").addEventListener("submit", async (e) => {
@@ -885,6 +1014,7 @@ function initEventListeners() {
 
   // Quick crear cliente/vehículo desde modal orden
   document.getElementById("btn-quick-crear-cliente").onclick = () => {
+    prepararCrearCliente();
     document.getElementById("modal-nuevo-cliente").classList.remove("hidden");
   };
 
@@ -935,7 +1065,7 @@ function initEventListeners() {
         }
       }
 
-      UTILS.showToast("¡Órden de ingreso creada con éxito!");
+      UTILS.showToast("¡Orden de ingreso creada con éxito!");
       document.getElementById("modal-nueva-orden").classList.add("hidden");
       document.getElementById("form-nueva-orden").reset();
       await cargarDatosYRenderizar();
@@ -949,6 +1079,7 @@ function initEventListeners() {
 
   // Modal Nuevo Cliente Submit
   document.getElementById("btn-modal-nuevo-cliente").onclick = () => {
+    prepararCrearCliente();
     document.getElementById("modal-nuevo-cliente").classList.remove("hidden");
   };
 
@@ -965,19 +1096,26 @@ function initEventListeners() {
       notas: document.getElementById("cli-notas").value
     };
 
+    const editClienteId = document.getElementById("cli-edit-id").value;
     try {
       if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Guardando...`; }
-      const nuevo = await API.crearCliente(cli);
-      
+      let nuevo;
+      if (editClienteId) {
+        cli.id = editClienteId;
+        nuevo = await API.actualizarCliente(cli);
+      } else {
+        nuevo = await API.crearCliente(cli);
+      }
+
       // Actualización inmediata en memoria local
       if (STATE.db) {
         if (!STATE.db.clientes) STATE.db.clientes = [];
-        if (!STATE.db.clientes.find(c => String(c.id) === String(nuevo.id))) {
-          STATE.db.clientes.push(nuevo);
-        }
+        const idx = STATE.db.clientes.findIndex(c => String(c.id) === String(nuevo.id));
+        if (idx >= 0) STATE.db.clientes[idx] = Object.assign({}, STATE.db.clientes[idx], nuevo);
+        else STATE.db.clientes.push(nuevo);
       }
 
-      UTILS.showToast("Cliente registrado correctamente");
+      UTILS.showToast(editClienteId ? "Cliente actualizado" : "Cliente registrado correctamente");
       document.getElementById("modal-nuevo-cliente").classList.add("hidden");
       document.getElementById("form-nuevo-cliente").reset();
 
@@ -1006,9 +1144,11 @@ function initEventListeners() {
     const clientes = STATE.db ? (STATE.db.clientes || []) : [];
     if (clientes.length === 0) {
       UTILS.showToast("Registra un cliente primero para asignarle un vehículo", "info");
+      prepararCrearCliente();
       document.getElementById("modal-nuevo-cliente").classList.remove("hidden");
       return;
     }
+    prepararCrearVehiculo();
     poblarSelectClientesModalVehiculo();
     document.getElementById("modal-nuevo-vehiculo").classList.remove("hidden");
   };
@@ -1028,19 +1168,26 @@ function initEventListeners() {
       vin: document.getElementById("veh-vin").value
     };
 
+    const editVehId = document.getElementById("veh-edit-id").value;
     try {
       if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Guardando...`; }
-      const nuevoVeh = await API.crearVehiculo(veh);
-      
+      let nuevoVeh;
+      if (editVehId) {
+        veh.id = editVehId;
+        nuevoVeh = await API.actualizarVehiculo(veh);
+      } else {
+        nuevoVeh = await API.crearVehiculo(veh);
+      }
+
       // Actualización inmediata local
       if (STATE.db) {
         if (!STATE.db.vehiculos) STATE.db.vehiculos = [];
-        if (!STATE.db.vehiculos.find(v => String(v.id) === String(nuevoVeh.id))) {
-          STATE.db.vehiculos.push(nuevoVeh);
-        }
+        const idx = STATE.db.vehiculos.findIndex(v => String(v.id) === String(nuevoVeh.id));
+        if (idx >= 0) STATE.db.vehiculos[idx] = Object.assign({}, STATE.db.vehiculos[idx], nuevoVeh);
+        else STATE.db.vehiculos.push(nuevoVeh);
       }
 
-      UTILS.showToast("Vehículo guardado en el sistema");
+      UTILS.showToast(editVehId ? "Vehículo actualizado" : "Vehículo guardado en el sistema");
       document.getElementById("modal-nuevo-vehiculo").classList.add("hidden");
       document.getElementById("form-nuevo-vehiculo").reset();
 
@@ -1065,15 +1212,21 @@ function initEventListeners() {
     const originalText = submitBtn ? submitBtn.innerHTML : "";
 
     const ordenId = document.getElementById("item-orden-id").value;
+    const detalleId = document.getElementById("item-detalle-id").value;
     const tipo = document.getElementById("item-tipo").value;
     const desc = document.getElementById("item-descripcion").value;
     const cant = Math.max(1, Number(document.getElementById("item-cantidad").value) || 1);
     const precio = Math.max(0, Number(document.getElementById("item-precio").value) || 0);
 
     try {
-      if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Añadiendo...`; }
-      await API.agregarServicioAOrden(ordenId, tipo, desc, cant, precio);
-      UTILS.showToast("Ítem agregado a la orden");
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Guardando...`; }
+      if (detalleId) {
+        await API.editarServicio({ id: detalleId, ordenId: ordenId, tipo: tipo, descripcion: desc, cantidad: cant, precioUnitario: precio });
+        UTILS.showToast("Ítem actualizado");
+      } else {
+        await API.agregarServicioAOrden(ordenId, tipo, desc, cant, precio);
+        UTILS.showToast("Ítem agregado a la orden");
+      }
       document.getElementById("modal-agregar-item").classList.add("hidden");
       document.getElementById("form-agregar-item").reset();
       await cargarDatosYRenderizar();
@@ -1087,10 +1240,17 @@ function initEventListeners() {
   // Foto Preview
   document.getElementById("foto-input").addEventListener("change", async (e) => {
     const file = e.target.files[0];
-    if (file) {
+    if (!file) return;
+    if (!validarArchivoImagen(file)) { e.target.value = ""; return; }
+    try {
       const base64 = await UTILS.compressAndConvertImage(file);
       document.getElementById("foto-preview-img").src = base64;
       document.getElementById("foto-preview-container").style.display = "block";
+    } catch (err) {
+      console.error("Error al procesar la imagen:", err);
+      UTILS.showToast("No se pudo procesar la imagen. Intenta con otra foto.", "error");
+      e.target.value = "";
+      document.getElementById("foto-preview-container").style.display = "none";
     }
   });
 
@@ -1105,6 +1265,7 @@ function initEventListeners() {
     const desc = document.getElementById("foto-descripcion").value;
 
     if (!file) return;
+    if (!validarArchivoImagen(file)) return;
 
     try {
       if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Subiendo...`; }
@@ -1144,10 +1305,11 @@ function initEventListeners() {
     }
   });
 
-  // Búsquedas en vivo
+  // Búsquedas en vivo (al escribir/filtrar se limpia el filtro de historial por vehículo)
+  const onFiltroOrdenes = () => { STATE.filterVehiculoId = null; renderListaOrdenes(); };
   ["search-ordenes", "filter-estado-orden"].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.oninput = renderListaOrdenes;
+    if (el) { el.oninput = onFiltroOrdenes; el.onchange = onFiltroOrdenes; }
   });
 
   const sc = document.getElementById("search-clientes");
@@ -1219,6 +1381,7 @@ function poblarSelectClientesModalVehiculo() {
 }
 
 function abrirModalNuevoVehiculoParaCliente(clienteId) {
+  prepararCrearVehiculo();
   poblarSelectClientesModalVehiculo();
   if (clienteId) {
     document.getElementById("veh-cliente").value = clienteId;
@@ -1227,6 +1390,7 @@ function abrirModalNuevoVehiculoParaCliente(clienteId) {
 }
 
 function abrirModalAgregarItem(ordenId) {
+  prepararCrearItem();
   document.getElementById("item-orden-id").value = ordenId;
   document.getElementById("modal-agregar-item").classList.remove("hidden");
 }
@@ -1234,4 +1398,170 @@ function abrirModalAgregarItem(ordenId) {
 function abrirModalSubirFoto(ordenId) {
   document.getElementById("foto-orden-id").value = ordenId;
   document.getElementById("modal-subir-foto").classList.remove("hidden");
+}
+
+// -------------------------------------------------------------
+// FASE 2: EDICIÓN Y ELIMINACIÓN
+// -------------------------------------------------------------
+
+// Cambia el título y el botón de un modal según el modo (crear vs editar).
+function _setModalTexto(modalId, formId, titleHtml, submitHtml) {
+  const h3 = document.querySelector(`#${modalId} .modal-header h3`);
+  const btn = document.querySelector(`#${formId} button[type='submit']`);
+  if (h3 && titleHtml) h3.innerHTML = titleHtml;
+  if (btn && submitHtml) btn.innerHTML = submitHtml;
+}
+
+// Preparadores de "modo crear" (limpian el id de edición y restauran textos).
+function prepararCrearCliente() {
+  document.getElementById("form-nuevo-cliente").reset();
+  document.getElementById("cli-edit-id").value = "";
+  _setModalTexto("modal-nuevo-cliente", "form-nuevo-cliente",
+    '<i class="fas fa-user-plus" style="color: var(--color-primary);"></i> Registrar Nuevo Cliente',
+    '<i class="fas fa-check"></i> GUARDAR CLIENTE');
+}
+function prepararCrearVehiculo() {
+  document.getElementById("form-nuevo-vehiculo").reset();
+  document.getElementById("veh-edit-id").value = "";
+  _setModalTexto("modal-nuevo-vehiculo", "form-nuevo-vehiculo",
+    '<i class="fas fa-car" style="color: var(--color-primary);"></i> Registrar Nuevo Vehículo',
+    '<i class="fas fa-check"></i> GUARDAR VEHÍCULO');
+}
+function prepararCrearItem() {
+  document.getElementById("form-agregar-item").reset();
+  document.getElementById("item-detalle-id").value = "";
+  _setModalTexto("modal-agregar-item", "form-agregar-item",
+    '<i class="fas fa-plus-circle"></i> Agregar Servicio o Repuesto a la Orden',
+    '<i class="fas fa-plus"></i> AGREGAR A ORDEN');
+}
+
+function abrirModalEditarCliente(id) {
+  const c = (STATE.db.clientes || []).find(x => String(x.id) === String(id));
+  if (!c) return;
+  document.getElementById("form-nuevo-cliente").reset();
+  document.getElementById("cli-edit-id").value = c.id;
+  document.getElementById("cli-nombre").value = c.nombre || "";
+  document.getElementById("cli-telefono").value = c.telefono || "";
+  document.getElementById("cli-cedula").value = c.cedula || "";
+  document.getElementById("cli-email").value = c.email || "";
+  document.getElementById("cli-notas").value = c.notas || "";
+  _setModalTexto("modal-nuevo-cliente", "form-nuevo-cliente",
+    '<i class="fas fa-user-pen" style="color: var(--color-primary);"></i> Editar Cliente',
+    '<i class="fas fa-check"></i> GUARDAR CAMBIOS');
+  document.getElementById("modal-nuevo-cliente").classList.remove("hidden");
+}
+
+function abrirModalEditarVehiculo(id) {
+  const v = (STATE.db.vehiculos || []).find(x => String(x.id) === String(id));
+  if (!v) return;
+  document.getElementById("form-nuevo-vehiculo").reset();
+  poblarSelectClientesModalVehiculo();
+  document.getElementById("veh-edit-id").value = v.id;
+  document.getElementById("veh-cliente").value = v.clienteId || "";
+  document.getElementById("veh-marca").value = v.marca || "";
+  actualizarModelosSegunMarca(v.marca || "");
+  document.getElementById("veh-modelo").value = v.modelo || "";
+  document.getElementById("veh-ano").value = v.año || "";
+  document.getElementById("veh-color").value = v.color || "";
+  document.getElementById("veh-placa").value = v.placa || "";
+  document.getElementById("veh-vin").value = v.vin || "";
+  _setModalTexto("modal-nuevo-vehiculo", "form-nuevo-vehiculo",
+    '<i class="fas fa-car" style="color: var(--color-primary);"></i> Editar Vehículo',
+    '<i class="fas fa-check"></i> GUARDAR CAMBIOS');
+  document.getElementById("modal-nuevo-vehiculo").classList.remove("hidden");
+}
+
+function abrirModalEditarItem(detalleId) {
+  const d = (STATE.db.detalleServicios || []).find(x => String(x.id) === String(detalleId));
+  if (!d) return;
+  document.getElementById("form-agregar-item").reset();
+  document.getElementById("item-detalle-id").value = d.id;
+  document.getElementById("item-orden-id").value = d.ordenId;
+  document.getElementById("item-tipo").value = d.tipo || "Mano de Obra";
+  document.getElementById("item-descripcion").value = d.descripcion || "";
+  document.getElementById("item-cantidad").value = d.cantidad || 1;
+  document.getElementById("item-precio").value = d.precioUnitario || 0;
+  _setModalTexto("modal-agregar-item", "form-agregar-item",
+    '<i class="fas fa-pen"></i> Editar Servicio o Repuesto',
+    '<i class="fas fa-check"></i> GUARDAR CAMBIOS');
+  document.getElementById("modal-agregar-item").classList.remove("hidden");
+}
+
+async function eliminarClienteUI(id) {
+  const db = STATE.db || {};
+  const tieneVeh = (db.vehiculos || []).some(v => String(v.clienteId) === String(id));
+  const tieneOrd = (db.ordenes || []).some(o => String(o.clienteId) === String(id));
+  if (tieneVeh || tieneOrd) {
+    await UTILS.confirmDialog({
+      title: "No se puede eliminar",
+      message: "Este cliente tiene vehículos u órdenes asociadas. Elimina o reasigna esos registros primero.",
+      confirmText: "Entendido", cancelText: "Cerrar"
+    });
+    return;
+  }
+  const ok = await UTILS.confirmDialog({
+    title: "Eliminar cliente",
+    message: "Se eliminará el cliente de forma permanente. ¿Deseas continuar?",
+    confirmText: "Sí, eliminar", danger: true
+  });
+  if (!ok) return;
+  try {
+    await API.eliminarCliente(id);
+    UTILS.showToast("Cliente eliminado");
+    await cargarDatosYRenderizar();
+  } catch (e) { UTILS.showToast("Error al eliminar cliente", "error"); }
+}
+
+async function eliminarVehiculoUI(id) {
+  const db = STATE.db || {};
+  const tieneOrd = (db.ordenes || []).some(o => String(o.vehiculoId) === String(id));
+  if (tieneOrd) {
+    await UTILS.confirmDialog({
+      title: "No se puede eliminar",
+      message: "Este vehículo tiene órdenes asociadas. Elimina esas órdenes primero.",
+      confirmText: "Entendido", cancelText: "Cerrar"
+    });
+    return;
+  }
+  const ok = await UTILS.confirmDialog({
+    title: "Eliminar vehículo",
+    message: "Se eliminará el vehículo de forma permanente. ¿Deseas continuar?",
+    confirmText: "Sí, eliminar", danger: true
+  });
+  if (!ok) return;
+  try {
+    await API.eliminarVehiculo(id);
+    UTILS.showToast("Vehículo eliminado");
+    await cargarDatosYRenderizar();
+  } catch (e) { UTILS.showToast("Error al eliminar vehículo", "error"); }
+}
+
+async function eliminarItemUI(ordenId, detalleId) {
+  const ok = await UTILS.confirmDialog({
+    title: "Eliminar ítem",
+    message: "Se quitará este trabajo/repuesto de la orden y se recalculará el total. ¿Continuar?",
+    confirmText: "Sí, eliminar", danger: true
+  });
+  if (!ok) return;
+  try {
+    await API.eliminarServicio(ordenId, detalleId);
+    UTILS.showToast("Ítem eliminado");
+    await cargarDatosYRenderizar();
+  } catch (e) { UTILS.showToast("Error al eliminar ítem", "error"); }
+}
+
+async function eliminarOrdenUI(ordenId) {
+  const ok = await UTILS.confirmDialog({
+    title: "Eliminar orden",
+    message: "Se eliminará la orden junto con sus trabajos, repuestos y fotos. Esta acción no se puede deshacer. ¿Continuar?",
+    confirmText: "Sí, eliminar", danger: true
+  });
+  if (!ok) return;
+  try {
+    await API.eliminarOrden(ordenId);
+    UTILS.showToast("Orden eliminada");
+    STATE.filterVehiculoId = null;
+    window.location.hash = "ordenes";
+    await cargarDatosYRenderizar();
+  } catch (e) { UTILS.showToast("Error al eliminar la orden", "error"); }
 }

@@ -1,415 +1,153 @@
 /**
- * TALLER EL VARÓN - API & STORE CLIENT
- * Interfaz de comunicación con Google Apps Script + Modo Local/Demo
+ * TALLER EL VARÓN - api.js  (cliente público, offline-first)
+ * Interfaz estable que usa app.js. Delega el almacenamiento en store.js y la
+ * sincronización en sync.js. Cada escritura:
+ *   1) sella el registro (uuid/createdAt/updatedAt),
+ *   2) lo aplica de inmediato en local (respuesta instantánea, con o sin red),
+ *   3) lo encola en el Outbox y dispara la sincronización en segundo plano.
+ * Los borrados son lógicos (tombstones) para no "revivir" registros al fusionar.
  */
 
-const CONFIG = {
-  API_URL: localStorage.getItem("taller_api_url") || "https://script.google.com/macros/s/AKfycbzxuBcAfHGUDdtSoou9I9i_ZT-kl58YCFb2F-Sxm1iPi2BeHpb3Z_ijIUbdMRaBZazj/exec",
-  TOKEN_KEY: "taller_session_token",
-  USER_KEY: "taller_user_info",
-  LOCAL_DB_KEY: "taller_el_varon_db_v1"
-};
-
-// Base de Datos inicial vacía para producción
-const DEMO_DATABASE = {
-  clientes: [],
-  vehiculos: [],
-  ordenes: [],
-  detalleServicios: [],
-  fotos: []
-};
-
-// Saneador universal para garantizar que todas las llaves existan como arreglos
-function sanitizeDb(data) {
-  if (!data || typeof data !== "object") data = {};
-  return {
-    clientes: Array.isArray(data.clientes) ? data.clientes : [],
-    vehiculos: Array.isArray(data.vehiculos) ? data.vehiculos : [],
-    ordenes: Array.isArray(data.ordenes) ? data.ordenes : [],
-    detalleServicios: Array.isArray(data.detalleServicios) ? data.detalleServicios : [],
-    fotos: Array.isArray(data.fotos) ? data.fotos : []
-  };
+// Encola: aplica localmente + guarda + sincroniza.
+function _enqueue(action, data) {
+  const op = { opId: uid(), action: action, data: data, ts: nowISO(), tries: 0 };
+  STORE.applyOp(STORE.memDb(), op);
+  STORE.outbox().push(op);
+  STORE.persist();
+  SYNC.emit();
+  SYNC.flush();
+  return op;
 }
 
-// Inicializar Base de Datos en localStorage si no existe
-function initLocalStore() {
-  const current = localStorage.getItem(CONFIG.LOCAL_DB_KEY);
-  if (!current) {
-    localStorage.setItem(CONFIG.LOCAL_DB_KEY, JSON.stringify(DEMO_DATABASE));
-  }
-}
-
-function getLocalStore() {
-  initLocalStore();
-  try {
-    const raw = localStorage.getItem(CONFIG.LOCAL_DB_KEY);
-    return sanitizeDb(JSON.parse(raw));
-  } catch (e) {
-    console.error("Error leyendo localStorage:", e);
-    return sanitizeDb(DEMO_DATABASE);
-  }
-}
-
-function saveLocalStore(db) {
-  const sanitized = sanitizeDb(db);
-  localStorage.setItem(CONFIG.LOCAL_DB_KEY, JSON.stringify(sanitized));
-}
-
-/**
- * Cliente API universal
- */
 const API = {
-  isCloudMode: () => {
-    return CONFIG.API_URL && CONFIG.API_URL.trim() !== "";
-  },
-
-  setApiUrl: (url) => {
-    CONFIG.API_URL = url ? url.trim() : "";
-    localStorage.setItem("taller_api_url", CONFIG.API_URL);
-  },
-
+  isCloudMode: () => CONFIG.API_URL && CONFIG.API_URL.trim() !== "",
+  setApiUrl: (url) => { CONFIG.API_URL = url ? url.trim() : ""; localStorage.setItem("taller_api_url", CONFIG.API_URL); SYNC.emit(); },
   getApiUrl: () => CONFIG.API_URL,
 
-  getLocalStore: getLocalStore,
+  ready: () => STORE.ready(),
+  getLocalStore: () => STORE.visibleDb(STORE.memDb()),
+  getPendingCount: () => STORE.outbox().length,
+  sync: async () => { await STORE.ready(); await SYNC.flush(); },
 
   login: async (usuario, clave) => {
     if (API.isCloudMode()) {
       try {
-        const resp = await fetch(CONFIG.API_URL, {
-          method: "POST",
-          redirect: "follow",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "login",
-            data: { usuario, clave }
-          })
-        });
-        const json = await resp.json();
+        const json = await SYNC.post("login", { data: { usuario, clave } });
         if (json.status === "success" && json.data) {
           localStorage.setItem(CONFIG.TOKEN_KEY, json.data.token || "TOKEN_PABLO_ROSARIO");
           localStorage.setItem(CONFIG.USER_KEY, JSON.stringify(json.data));
           return json.data;
-        } else {
-          throw new Error(json.message || "Usuario o contraseña incorrectos");
-        }
-      } catch (err) {
-        console.warn("Fallo en login de nube. Intentando validación local:", err);
-      }
+        } else { throw new Error(json.message || "Usuario o contraseña incorrectos"); }
+      } catch (err) { console.warn("Fallo en login de nube. Intentando validación local:", err); }
     }
-
     if (usuario === "prosario" && clave === "tallerelvaron") {
-      const data = {
-        token: "TOKEN_LOCAL_PABLO_ROSARIO",
-        usuario: "Pablo Rosario",
-        taller: "Taller El Varón (Modo Local)"
-      };
+      const data = { token: "TOKEN_LOCAL_PABLO_ROSARIO", usuario: "Pablo Rosario", taller: "Taller El Varón (Modo Local)" };
       localStorage.setItem(CONFIG.TOKEN_KEY, data.token);
       localStorage.setItem(CONFIG.USER_KEY, JSON.stringify(data));
       return data;
-    } else {
-      throw new Error("Usuario o contraseña incorrectos.");
     }
+    throw new Error("Usuario o contraseña incorrectos.");
   },
 
-  logout: () => {
-    localStorage.removeItem(CONFIG.TOKEN_KEY);
-    localStorage.removeItem(CONFIG.USER_KEY);
-  },
+  logout: () => { localStorage.removeItem(CONFIG.TOKEN_KEY); localStorage.removeItem(CONFIG.USER_KEY); },
+  isAuthenticated: () => !!localStorage.getItem(CONFIG.TOKEN_KEY),
 
-  isAuthenticated: () => {
-    return !!localStorage.getItem(CONFIG.TOKEN_KEY);
-  },
-
+  // Descarga con merge: sube lo pendiente, baja la nube y reaplica el Outbox.
+  // Conserva los tombstones (para que un borrado no reaparezca) y da prioridad a
+  // lo pendiente local (last-write-wins efectivo: la nube ya refleja lo último confirmado).
   obtenerTodo: async () => {
-    if (API.isCloudMode()) {
+    await STORE.ready();
+    if (API.isCloudMode() && (typeof navigator === "undefined" || navigator.onLine)) {
       try {
-        const resp = await fetch(CONFIG.API_URL, {
-          method: "POST",
-          redirect: "follow",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "obtenerTodo",
-            token: localStorage.getItem(CONFIG.TOKEN_KEY)
-          })
-        });
-        const json = await resp.json();
+        await SYNC.flush();
+        const json = await SYNC.post("obtenerTodo", {});
         if (json.status === "success" && json.data) {
-          const sanitized = sanitizeDb(json.data);
-          saveLocalStore(sanitized);
-          return sanitized;
+          const merged = STORE.sanitizeDb(json.data);
+          STORE.outbox().forEach(op => { try { STORE.applyOp(merged, op); } catch (e) { } });
+          STORE.setMem(merged);
+          STORE.persist();
+          SYNC.emit();
+          return STORE.visibleDb(merged);
         }
-      } catch (err) {
-        console.warn("No se pudo sincronizar con la nube. Cargando datos locales:", err);
-      }
+      } catch (err) { console.warn("No se pudo sincronizar con la nube. Datos locales:", err); }
     }
-    return getLocalStore();
+    SYNC.emit();
+    return STORE.visibleDb(STORE.memDb());
   },
 
+  // ---- CREACIÓN (uuid + timestamps en el cliente) ----
   crearCliente: async (cliente) => {
-    if (API.isCloudMode()) {
-      try {
-        const resp = await fetch(CONFIG.API_URL, {
-          method: "POST",
-          redirect: "follow",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "crearCliente",
-            token: localStorage.getItem(CONFIG.TOKEN_KEY),
-            data: cliente
-          })
-        });
-        const json = await resp.json();
-        if (json.status === "success" && json.data) {
-          const db = getLocalStore();
-          if (!db.clientes.find(c => c.id === json.data.id)) {
-            db.clientes.push(json.data);
-            saveLocalStore(db);
-          }
-          return json.data;
-        }
-      } catch (e) {
-        console.error("Error al guardar cliente en la nube:", e);
-      }
-    }
-
-    // Simulación Local
-    const db = getLocalStore();
-    const newId = "CLI-" + String(db.clientes.length + 1).padStart(4, "0");
-    const nuevoCliente = {
-      id: newId,
-      ...cliente,
-      fechaRegistro: new Date().toISOString().split("T")[0]
-    };
-    db.clientes.push(nuevoCliente);
-    saveLocalStore(db);
-    return nuevoCliente;
+    await STORE.ready();
+    const rec = STORE.stamp(Object.assign({ id: uid(), fechaRegistro: nowISO().split("T")[0] }, cliente), true);
+    _enqueue("crearCliente", rec);
+    return rec;
   },
-
   crearVehiculo: async (vehiculo) => {
-    if (API.isCloudMode()) {
-      try {
-        const resp = await fetch(CONFIG.API_URL, {
-          method: "POST",
-          redirect: "follow",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "crearVehiculo",
-            token: localStorage.getItem(CONFIG.TOKEN_KEY),
-            data: vehiculo
-          })
-        });
-        const json = await resp.json();
-        if (json.status === "success" && json.data) {
-          const db = getLocalStore();
-          if (!db.vehiculos.find(v => v.id === json.data.id)) {
-            db.vehiculos.push(json.data);
-            saveLocalStore(db);
-          }
-          return json.data;
-        }
-      } catch (e) {
-        console.error("Error al guardar vehículo en la nube:", e);
-      }
-    }
-
-    // Simulación Local
-    const db = getLocalStore();
-    const newId = "VEH-" + String(db.vehiculos.length + 1).padStart(4, "0");
-    const nuevoVehiculo = {
-      id: newId,
-      ...vehiculo
-    };
-    db.vehiculos.push(nuevoVehiculo);
-    saveLocalStore(db);
-    return nuevoVehiculo;
+    await STORE.ready();
+    const rec = STORE.stamp(Object.assign({ id: uid() }, vehiculo), true);
+    _enqueue("crearVehiculo", rec);
+    return rec;
   },
-
   crearOrden: async (ordenData) => {
-    if (API.isCloudMode()) {
-      try {
-        const resp = await fetch(CONFIG.API_URL, {
-          method: "POST",
-          redirect: "follow",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "crearOrden",
-            token: localStorage.getItem(CONFIG.TOKEN_KEY),
-            data: ordenData
-          })
-        });
-        const json = await resp.json();
-        if (json.status === "success" && json.data) {
-          const db = getLocalStore();
-          if (!db.ordenes.find(o => o.id === json.data.id)) {
-            db.ordenes.push(json.data);
-            saveLocalStore(db);
-          }
-          return json.data;
-        }
-      } catch (e) {
-        console.error("Error al crear orden en la nube:", e);
-      }
-    }
-
-    // Simulación Local
-    const db = getLocalStore();
-    const year = new Date().getFullYear();
-    const count = db.ordenes.length + 1;
-    const ordenId = `ORD-${year}-${String(count).padStart(4, "0")}`;
-    const fechaIngreso = new Date().toISOString();
-
-    let total = 0;
-    if (ordenData.servicios && Array.isArray(ordenData.servicios)) {
-      ordenData.servicios.forEach((s, idx) => {
-        const subtotal = (Number(s.cantidad) || 1) * (Number(s.precioUnitario) || 0);
-        total += subtotal;
-        db.detalleServicios.push({
-          id: `DET-${ordenId}-${idx + 1}`,
-          ordenId: ordenId,
-          tipo: s.tipo || "Servicio",
-          descripcion: s.descripcion,
-          cantidad: Number(s.cantidad) || 1,
-          precioUnitario: Number(s.precioUnitario) || 0,
-          subtotal: subtotal
-        });
-      });
-    }
-
-    const nuevaOrden = {
-      id: ordenId,
-      clienteId: ordenData.clienteId,
-      vehiculoId: ordenData.vehiculoId,
-      fechaIngreso: fechaIngreso,
-      fechaEntrega: "",
-      estado: ordenData.estado || "Pendiente",
-      motivoVisita: ordenData.motivoVisita || "",
-      diagnostico: ordenData.diagnostico || "",
-      kilometrajeEntrada: Number(ordenData.kilometrajeEntrada) || 0,
-      montoTotal: total,
-      notas: ordenData.notas || ""
-    };
-
-    db.ordenes.push(nuevaOrden);
-    saveLocalStore(db);
-    return nuevaOrden;
+    await STORE.ready();
+    const ordenId = folioOrden();
+    const servicios = (Array.isArray(ordenData.servicios) ? ordenData.servicios : []).map(s => ({
+      id: uid(), uuid: undefined, tipo: s.tipo || "Servicio", descripcion: s.descripcion || "",
+      cantidad: Number(s.cantidad) || 1, precioUnitario: Number(s.precioUnitario) || 0
+    }));
+    servicios.forEach(s => { s.uuid = s.id; });
+    const data = STORE.stamp({
+      id: ordenId, clienteId: ordenData.clienteId, vehiculoId: ordenData.vehiculoId,
+      fechaIngreso: nowISO(), estado: ordenData.estado || "Pendiente",
+      motivoVisita: ordenData.motivoVisita || "", diagnostico: ordenData.diagnostico || "",
+      kilometrajeEntrada: Number(ordenData.kilometrajeEntrada) || 0, notas: ordenData.notas || "",
+      servicios: servicios
+    }, true);
+    _enqueue("crearOrden", data);
+    return STORE.memDb().ordenes.find(o => eq(o.id, ordenId));
   },
-
   actualizarEstadoOrden: async (ordenId, nuevoEstado) => {
-    const fechaEntrega = nuevoEstado === "Entregado" ? new Date().toISOString() : "";
-
-    if (API.isCloudMode()) {
-      try {
-        const resp = await fetch(CONFIG.API_URL, {
-          method: "POST",
-          redirect: "follow",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "actualizarEstadoOrden",
-            token: localStorage.getItem(CONFIG.TOKEN_KEY),
-            data: { ordenId, nuevoEstado, fechaEntrega }
-          })
-        });
-        const json = await resp.json();
-        if (json.status === "success" && json.data) return json.data;
-      } catch (e) {
-        console.error("Error al actualizar estado en la nube:", e);
-      }
-    }
-
-    // Local
-    const db = getLocalStore();
-    const ord = db.ordenes.find(o => o.id === ordenId);
-    if (ord) {
-      ord.estado = nuevoEstado;
-      if (nuevoEstado === "Entregado") {
-        ord.fechaEntrega = fechaEntrega || new Date().toISOString();
-      } else {
-        ord.fechaEntrega = "";
-      }
-      saveLocalStore(db);
-    }
-    return ord;
+    await STORE.ready();
+    _enqueue("actualizarEstadoOrden", { ordenId, nuevoEstado, fechaEntrega: nuevoEstado === "Entregado" ? nowISO() : "", updatedAt: nowISO() });
+    return { id: ordenId, estado: nuevoEstado };
   },
-
   agregarServicioAOrden: async (ordenId, tipo, descripcion, cantidad, precioUnitario) => {
-    const cant = Number(cantidad) || 1;
-    const precio = Number(precioUnitario) || 0;
-    const subtotal = cant * precio;
-
-    if (API.isCloudMode()) {
-      try {
-        const resp = await fetch(CONFIG.API_URL, {
-          method: "POST",
-          redirect: "follow",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "agregarServicioAOrden",
-            token: localStorage.getItem(CONFIG.TOKEN_KEY),
-            data: { ordenId, tipo, descripcion, cantidad: cant, precioUnitario: precio }
-          })
-        });
-        const json = await resp.json();
-        if (json.status === "success" && json.data) return json.data;
-      } catch (e) {
-        console.error("Error al agregar ítem en la nube:", e);
-      }
-    }
-
-    // Local
-    const db = getLocalStore();
-    const nuevoDetalle = {
-      id: `DET-${Date.now()}`,
-      ordenId: ordenId,
-      tipo: tipo,
-      descripcion: descripcion,
-      cantidad: cant,
-      precioUnitario: precio,
-      subtotal: subtotal
-    };
-    db.detalleServicios.push(nuevoDetalle);
-
-    // Actualizar total orden
-    const ord = db.ordenes.find(o => o.id === ordenId);
-    if (ord) {
-      const items = db.detalleServicios.filter(d => d.ordenId === ordenId);
-      ord.montoTotal = items.reduce((acc, curr) => acc + curr.subtotal, 0);
-    }
-
-    saveLocalStore(db);
-    return nuevoDetalle;
+    await STORE.ready();
+    const data = STORE.stamp({ id: uid(), ordenId, tipo, descripcion, cantidad: Number(cantidad) || 1, precioUnitario: Number(precioUnitario) || 0 }, true);
+    _enqueue("agregarServicioAOrden", data);
+    return STORE.memDb().detalleServicios.find(d => eq(d.id, data.id));
+  },
+  subirFoto: async (ordenId, base64, nombreArchivo, descripcion) => {
+    await STORE.ready();
+    const data = STORE.stamp({ id: uid(), ordenId, base64, nombreArchivo, descripcion: descripcion || "Evidencia fotográfica" }, true);
+    _enqueue("subirFoto", data);
+    return STORE.memDb().fotos.find(f => eq(f.id, data.id));
   },
 
-  subirFoto: async (ordenId, base64, nombreArchivo, descripcion) => {
-    if (API.isCloudMode()) {
-      try {
-        const resp = await fetch(CONFIG.API_URL, {
-          method: "POST",
-          redirect: "follow",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "subirFoto",
-            token: localStorage.getItem(CONFIG.TOKEN_KEY),
-            data: { ordenId, base64, nombreArchivo, descripcion }
-          })
-        });
-        const json = await resp.json();
-        if (json.status === "success" && json.data) return json.data;
-      } catch (e) {
-        console.error("Error al subir foto a Google Drive:", e);
-      }
-    }
+  // ---- EDICIÓN ----
+  actualizarCliente: async (cliente) => {
+    await STORE.ready();
+    const data = Object.assign({}, cliente, { updatedAt: nowISO() });
+    _enqueue("actualizarCliente", data);
+    return STORE.memDb().clientes.find(c => eq(c.id, cliente.id)) || data;
+  },
+  actualizarVehiculo: async (vehiculo) => {
+    await STORE.ready();
+    const data = Object.assign({}, vehiculo, { updatedAt: nowISO() });
+    _enqueue("actualizarVehiculo", data);
+    return STORE.memDb().vehiculos.find(v => eq(v.id, vehiculo.id)) || data;
+  },
+  editarServicio: async (detalle) => {
+    await STORE.ready();
+    const data = { id: detalle.id, ordenId: detalle.ordenId, tipo: detalle.tipo, descripcion: detalle.descripcion, cantidad: Number(detalle.cantidad) || 1, precioUnitario: Number(detalle.precioUnitario) || 0, updatedAt: nowISO() };
+    _enqueue("editarServicioDetalle", data);
+    return STORE.memDb().detalleServicios.find(d => eq(d.id, data.id));
+  },
 
-    // Local / Base64 Data URL
-    const db = getLocalStore();
-    const nuevaFoto = {
-      id: `IMG-${Date.now()}`,
-      ordenId: ordenId,
-      url: base64,
-      descripcion: descripcion || "Evidencia fotográfica",
-      fechaSubida: new Date().toISOString()
-    };
-    db.fotos.push(nuevaFoto);
-    saveLocalStore(db);
-    return nuevaFoto;
-  }
+  // ---- ELIMINACIÓN (lógica / tombstone) ----
+  eliminarServicio: async (ordenId, detalleId) => { await STORE.ready(); _enqueue("eliminarServicioDetalle", { id: detalleId, ordenId, deleted: true, deletedAt: nowISO(), updatedAt: nowISO() }); return { id: detalleId, ordenId }; },
+  eliminarOrden: async (ordenId) => { await STORE.ready(); _enqueue("eliminarOrden", { ordenId, deleted: true, deletedAt: nowISO(), updatedAt: nowISO() }); return { id: ordenId, eliminado: true }; },
+  eliminarCliente: async (id) => { await STORE.ready(); _enqueue("eliminarRegistro", { tabla: "Clientes", id, deleted: true, deletedAt: nowISO(), updatedAt: nowISO() }); return { id, eliminado: true }; },
+  eliminarVehiculo: async (id) => { await STORE.ready(); _enqueue("eliminarRegistro", { tabla: "Vehiculos", id, deleted: true, deletedAt: nowISO(), updatedAt: nowISO() }); return { id, eliminado: true }; }
 };
+if (typeof window !== "undefined") window.API = API;

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Taller El Varón — Sistema de Gestión Mecánica</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="index.css?v=4.0">
+  <link rel="stylesheet" href="index.css?v=5.1">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
@@ -192,7 +192,7 @@
             <p style="color: var(--text-muted); font-size: 0.85rem;">Historial y seguimiento de reparaciones</p>
           </div>
           <button class="btn btn-primary btn-open-nueva-orden">
-            <i class="fas fa-plus-circle"></i> NUEVA ÓRDEN
+            <i class="fas fa-plus-circle"></i> NUEVA ORDEN
           </button>
         </div>
 
@@ -307,7 +307,7 @@
         </div>
       </section>
 
-      <!-- VISTA 5: DETALLE DE ÓRDEN -->
+      <!-- VISTA 5: DETALLE DE ORDEN -->
       <section id="view-orden-detalle" class="view-section">
         <div class="action-bar">
           <button class="btn btn-secondary btn-sm" id="btn-back-ordenes">
@@ -332,7 +332,7 @@
     </main>
   </div>
 
-  <!-- MODAL: NUEVO INGRESO / NUEVA ÓRDEN -->
+  <!-- MODAL: NUEVO INGRESO / NUEVA ORDEN -->
   <div id="modal-nueva-orden" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-container">
       <div class="modal-header">
@@ -380,7 +380,7 @@
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
-          <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> GUARDAR Y CREAR ÓRDEN</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> GUARDAR Y CREAR ORDEN</button>
         </div>
       </form>
     </div>
@@ -395,6 +395,7 @@
       </div>
 
       <form id="form-nuevo-cliente">
+        <input type="hidden" id="cli-edit-id">
         <div class="modal-body">
           <div class="form-group">
             <label for="cli-nombre">Nombre y Apellidos *</label>
@@ -403,12 +404,12 @@
 
           <div class="form-group">
             <label for="cli-telefono">Teléfono / WhatsApp *</label>
-            <input type="text" id="cli-telefono" class="form-control" placeholder="Ej: 809-555-1234" required>
+            <input type="tel" inputmode="numeric" autocomplete="tel" id="cli-telefono" class="form-control" placeholder="Ej: 809-555-1234" required>
           </div>
 
           <div class="form-group">
             <label for="cli-cedula">Cédula (opcional)</label>
-            <input type="text" id="cli-cedula" class="form-control" placeholder="Ej: 001-1234567-8">
+            <input type="text" inputmode="numeric" id="cli-cedula" class="form-control" placeholder="Ej: 001-1234567-8">
           </div>
 
           <div class="form-group">
@@ -439,6 +440,7 @@
       </div>
 
       <form id="form-nuevo-vehiculo">
+        <input type="hidden" id="veh-edit-id">
         <div class="modal-body">
           <div class="form-group">
             <label for="veh-cliente">Propietario / Cliente *</label>
@@ -535,16 +537,17 @@
     </div>
   </div>
 
-  <!-- MODAL: AGREGAR ITEM A ÓRDEN -->
+  <!-- MODAL: AGREGAR ITEM A ORDEN -->
   <div id="modal-agregar-item" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-container">
       <div class="modal-header">
-        <h3><i class="fas fa-plus-circle"></i> Agregar Servicio o Repuesto a la Órden</h3>
+        <h3><i class="fas fa-plus-circle"></i> Agregar Servicio o Repuesto a la Orden</h3>
         <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
       </div>
 
       <form id="form-agregar-item">
         <input type="hidden" id="item-orden-id">
+        <input type="hidden" id="item-detalle-id">
         <div class="modal-body">
           <div class="form-group">
             <label for="item-tipo">Tipo *</label>
@@ -572,7 +575,7 @@
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary modal-close">Cancelar</button>
-          <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> AGREGAR A ÓRDEN</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> AGREGAR A ORDEN</button>
         </div>
       </form>
     </div>
@@ -618,7 +621,7 @@
       <div class="modal-header no-print">
         <h3><i class="fas fa-print"></i> Vista Previa de Constancia Imprimible</h3>
         <div>
-          <button class="btn btn-primary btn-sm" onclick="window.print()"><i class="fas fa-print"></i> IMPRIMIR AHORA</button>
+          <button class="btn btn-primary btn-sm" onclick="PRINT_MODULE.doPrint()"><i class="fas fa-print"></i> IMPRIMIR AHORA</button>
           <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
         </div>
       </div>
@@ -630,10 +633,23 @@
   </div>
 
   <!-- SCRIPTS -->
-  <script src="utils.js?v=4.0"></script>
-  <script src="api.js?v=4.0"></script>
-  <script src="print.js?v=4.0"></script>
-  <script src="app.js?v=4.0"></script>
+  <script src="utils.js?v=5.1"></script>
+  <script src="store.js?v=5.1"></script>
+  <script src="sync.js?v=5.1"></script>
+  <script src="api.js?v=5.1"></script>
+  <script src="print.js?v=5.1"></script>
+  <script src="app.js?v=5.1"></script>
+
+  <!-- FASE 5: PWA offline real (registro del service worker) -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("sw.js").catch(function (e) {
+          console.warn("Service worker no registrado:", e);
+        });
+      });
+    }
+  </script>
 
 </body>
 </html>

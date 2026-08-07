@@ -5,12 +5,72 @@
 
 const PRINT_MODULE = {
 
+  _lastReceiptHtml: "",
+
   printOrder: (ord, cli, veh, detalles, fotos) => {
     const modalContent = document.getElementById("print-modal-content");
     if (!modalContent) return;
 
-    modalContent.innerHTML = PRINT_MODULE.generateReceiptHtml(ord, cli, veh, detalles, fotos);
+    const html = PRINT_MODULE.generateReceiptHtml(ord, cli, veh, detalles, fotos);
+    PRINT_MODULE._lastReceiptHtml = html;
+    modalContent.innerHTML = html;
     document.getElementById("print-modal").classList.remove("hidden");
+  },
+
+  /**
+   * Imprime SOLO la constancia usando un iframe aislado.
+   * Ventaja: no depende de @media print global ni de que el modal esté abierto,
+   * por lo que nunca sale una página en blanco.
+   */
+  doPrint: () => {
+    const receiptHtml = PRINT_MODULE._lastReceiptHtml
+      || (document.getElementById("print-modal-content") || {}).innerHTML
+      || "";
+    if (!receiptHtml.trim()) {
+      UTILS.showToast("Primero abre la constancia de una orden para imprimir.", "warning");
+      return;
+    }
+
+    // Rutas absolutas para que los estilos e íconos carguen dentro del iframe
+    const cssHref = new URL("index.css?v=4.0", location.href).href;
+    const faHref = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css";
+
+    const doc = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<link rel="stylesheet" href="${faHref}">
+<link rel="stylesheet" href="${cssHref}">
+<style>
+  @page { size: letter; margin: 8mm 10mm; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+</style>
+</head><body>${receiptHtml}</body></html>`;
+
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+    document.body.appendChild(iframe);
+
+    const cleanup = () => { try { document.body.removeChild(iframe); } catch (e) {} };
+
+    iframe.onload = () => {
+      // Pequeña espera para asegurar que la hoja de estilos aplique antes de imprimir
+      setTimeout(() => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch (e) {
+          console.error("Error al imprimir:", e);
+          UTILS.showToast("No se pudo abrir el diálogo de impresión.", "error");
+        }
+        setTimeout(cleanup, 1500);
+      }, 350);
+    };
+
+    const idoc = iframe.contentWindow.document;
+    idoc.open();
+    idoc.write(doc);
+    idoc.close();
   },
 
   generateReceiptHtml: (ord, cli, veh, detalles, fotos) => {
