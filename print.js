@@ -112,7 +112,7 @@ const PRINT_MODULE = {
     }
 
     // Rutas absolutas para que los estilos e íconos carguen dentro del iframe
-    const cssHref = new URL("index.css?v=6.3", location.href).href;
+    const cssHref = new URL("index.css?v=6.4", location.href).href;
     const faHref = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css";
 
     const doc = `<!DOCTYPE html>
