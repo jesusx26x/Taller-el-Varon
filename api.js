@@ -98,7 +98,7 @@ const API = {
     servicios.forEach(s => { s.uuid = s.id; });
     const data = STORE.stamp({
       id: ordenId, clienteId: ordenData.clienteId, vehiculoId: ordenData.vehiculoId,
-      fechaIngreso: nowISO(), estado: ordenData.estado || "Pendiente",
+      fechaIngreso: nowISO(), estado: ordenData.estado || UTILS.ESTADOS_ORDEN.PENDIENTE,
       motivoVisita: ordenData.motivoVisita || "", diagnostico: ordenData.diagnostico || "",
       kilometrajeEntrada: Number(ordenData.kilometrajeEntrada) || 0, notas: ordenData.notas || "",
       servicios: servicios
@@ -108,7 +108,7 @@ const API = {
   },
   actualizarEstadoOrden: async (ordenId, nuevoEstado) => {
     await STORE.ready();
-    _enqueue("actualizarEstadoOrden", { ordenId, nuevoEstado, fechaEntrega: nuevoEstado === "Entregado" ? nowISO() : "", updatedAt: nowISO() });
+    _enqueue("actualizarEstadoOrden", { ordenId, nuevoEstado, fechaEntrega: nuevoEstado === UTILS.ESTADOS_ORDEN.ENTREGADO ? nowISO() : "", updatedAt: nowISO() });
     return { id: ordenId, estado: nuevoEstado };
   },
   agregarServicioAOrden: async (ordenId, tipo, descripcion, cantidad, precioUnitario) => {

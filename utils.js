@@ -4,6 +4,16 @@
 
 const UTILS = {
   /**
+   * Constantes de Estados de Órdenes
+   */
+  ESTADOS_ORDEN: Object.freeze({
+    PENDIENTE: "Pendiente",
+    EN_PROCESO: "En Proceso",
+    LISTO: "Listo",
+    ENTREGADO: "Entregado"
+  }),
+
+  /**
    * Formatear moneda en Peso Dominicano (RD$)
    */
   formatMoney: (amount) => {
@@ -60,15 +70,15 @@ const UTILS = {
     let icon = "fa-clock";
 
     switch (status) {
-      case "En Proceso":
+      case UTILS.ESTADOS_ORDEN.EN_PROCESO:
         colorClass = "badge-process";
         icon = "fa-wrench";
         break;
-      case "Listo":
+      case UTILS.ESTADOS_ORDEN.LISTO:
         colorClass = "badge-ready";
         icon = "fa-check-circle";
         break;
-      case "Entregado":
+      case UTILS.ESTADOS_ORDEN.ENTREGADO:
         colorClass = "badge-delivered";
         icon = "fa-flag-checkered";
         break;

@@ -195,7 +195,7 @@ function renderDashboard() {
   const currentYear = new Date().getFullYear();
 
   // 1. Vehículos en taller hoy (Pendiente o En Proceso)
-  const enTaller = ordenes.filter(o => o.estado === "Pendiente" || o.estado === "En Proceso").length;
+  const enTaller = ordenes.filter(o => o.estado === UTILS.ESTADOS_ORDEN.PENDIENTE || o.estado === UTILS.ESTADOS_ORDEN.EN_PROCESO).length;
 
   // 2. Ingresados Hoy
   const ingresadosHoy = ordenes.filter(o => {
@@ -746,10 +746,10 @@ function renderOrdenDetalle(ordenId) {
 
   // DEFINICIÓN DE ESTADOS Y TRACKER VISUAL DE AVANCE
   const estadosList = [
-    { key: "Pendiente", icon: "fa-clock", label: "1. Pendiente" },
-    { key: "En Proceso", icon: "fa-wrench", label: "2. En Proceso" },
-    { key: "Listo", icon: "fa-check-circle", label: "3. Listo" },
-    { key: "Entregado", icon: "fa-flag-checkered", label: "4. Entregado" }
+    { key: UTILS.ESTADOS_ORDEN.PENDIENTE, icon: "fa-clock", label: "1. Pendiente" },
+    { key: UTILS.ESTADOS_ORDEN.EN_PROCESO, icon: "fa-wrench", label: "2. En Proceso" },
+    { key: UTILS.ESTADOS_ORDEN.LISTO, icon: "fa-check-circle", label: "3. Listo" },
+    { key: UTILS.ESTADOS_ORDEN.ENTREGADO, icon: "fa-flag-checkered", label: "4. Entregado" }
   ];
 
   const currentIdx = estadosList.findIndex(e => e.key === ord.estado);
@@ -908,7 +908,7 @@ function renderOrdenDetalle(ordenId) {
 
 async function cambiarEstadoOrden(ordenId, nuevoEstado) {
   // Confirmar el paso a "Entregado": registra fecha de entrega y cierra la orden.
-  if (nuevoEstado === "Entregado") {
+  if (nuevoEstado === UTILS.ESTADOS_ORDEN.ENTREGADO) {
     const ok = await UTILS.confirmDialog({
       title: "Marcar como Entregado",
       message: "Se registrará la fecha y hora de entrega y la orden quedará cerrada. ¿Deseas continuar?",

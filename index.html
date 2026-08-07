@@ -21,7 +21,7 @@
         <i class="fas fa-wrench"></i>
       </div>
       <h2>TALLER PABLO ROSARIO - EL VARÓN</h2>
-      <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
+      <p class="text-subtitle-muted mb-1-5">
         Mecánica en General • Especialidad Japoneses y Americanos
       </p>
 
@@ -36,12 +36,12 @@
           <input type="password" id="login-pass" class="form-control" value="tallerelvaron" required autocomplete="current-password">
         </div>
 
-        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+        <button type="submit" class="btn btn-primary w-100 mt-0-5">
           <i class="fas fa-right-to-bracket"></i> INGRESAR AL SISTEMA
         </button>
       </form>
 
-      <p style="margin-top: 1.5rem; font-size: 0.75rem; color: var(--text-muted);">
+      <p class="login-footer-text">
         Sistema para Pablo Rosario • Los Alcarrizos, Santo Domingo
       </p>
     </div>
@@ -72,7 +72,7 @@
 
       <div class="user-area">
         <div class="user-badge" id="cloud-status-badge" title="Conexión en tiempo real activa">
-          <i class="fas fa-wifi" style="color: #10B981;"></i> Nube Sincronizada
+          <i class="fas fa-wifi icon-online"></i> Nube Sincronizada
         </div>
         <div class="user-badge">
           <i class="fas fa-user-circle"></i> Pablo Rosario
@@ -98,13 +98,13 @@
               <p>Para registrar la entrada de un vehículo, presiona el botón <strong>"+ NUEVO INGRESO DE VEHÍCULO"</strong>. Todo quedará guardado automáticamente en tu Google Sheet.</p>
             </div>
           </div>
-          <button id="btn-close-welcome" class="btn btn-secondary btn-sm" style="background: rgba(255,255,255,0.2); color: white; border: none;"><i class="fas fa-times" aria-hidden="true"></i> Entendido</button>
+          <button id="btn-close-welcome" class="btn btn-secondary btn-sm btn-banner-close"><i class="fas fa-times" aria-hidden="true"></i> Entendido</button>
         </div>
 
         <div class="action-bar">
           <div>
             <h2>Panel de Control &amp; Reportería</h2>
-            <p style="color: var(--text-muted); font-size: 0.85rem;">Resumen financiero y actividad diaria de Taller Pablo Rosario - El Varón</p>
+            <p class="text-subtitle-muted">Resumen financiero y actividad diaria de Taller Pablo Rosario - El Varón</p>
           </div>
           <button class="btn btn-primary btn-open-nueva-orden">
             <i class="fas fa-plus-circle"></i> NUEVO INGRESO DE VEHÍCULO
@@ -112,11 +112,11 @@
         </div>
 
         <!-- BÚSQUEDA GLOBAL UNIFICADA -->
-        <div class="search-box" style="margin-bottom: 1.5rem;">
+        <div class="search-box mb-1-5">
           <i class="fas fa-search"></i>
           <input type="text" id="global-search-input" class="search-input" placeholder="🔍 Búsqueda rápida global: escribe nombre, teléfono, cédula, placa, vehículo o N° de orden..." aria-label="Búsqueda global por nombre, teléfono, placa o número de orden">
         </div>
-        <div id="global-search-results" style="margin-bottom: 1.5rem; display: none;"></div>
+        <div id="global-search-results" class="mb-1-5" style="display: none;"></div>
 
         <!-- TARJETAS DE ESTADÍSTICAS Y RESUMEN FINANCIERO -->
         <div class="stats-grid">
@@ -153,8 +153,8 @@
           </div>
         </div>
 
-        <div style="margin-top: 1.5rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div class="mt-1-5">
+          <div class="flex-between-center mb-1-5">
             <h3>Últimas Órdenes de Trabajo</h3>
             <a href="#ordenes" style="font-size: 0.85rem; font-weight: 600;">Ver todas <i class="fas fa-arrow-right"></i></a>
           </div>
@@ -189,7 +189,7 @@
         <div class="action-bar">
           <div>
             <h2>Órdenes de Trabajo</h2>
-            <p style="color: var(--text-muted); font-size: 0.85rem;">Historial y seguimiento de reparaciones</p>
+            <p class="text-subtitle-muted">Historial y seguimiento de reparaciones</p>
           </div>
           <button class="btn btn-primary btn-open-nueva-orden">
             <i class="fas fa-plus-circle"></i> NUEVA ORDEN
@@ -202,7 +202,7 @@
             <input type="text" id="search-ordenes" class="search-input" placeholder="Buscar por cliente, placa, marca o N° de orden...">
           </div>
           <div>
-            <select id="filter-estado-orden" class="form-control" style="width: auto;">
+            <select id="filter-estado-orden" class="form-control w-auto">
               <option value="TODOS">Todos los Estados</option>
               <option value="Pendiente">Pendiente</option>
               <option value="En Proceso">En Proceso</option>
@@ -238,14 +238,14 @@
         <div class="action-bar">
           <div>
             <h2>Directorio de Clientes</h2>
-            <p style="color: var(--text-muted); font-size: 0.85rem;">Clientes registrados en el taller</p>
+            <p class="text-subtitle-muted">Clientes registrados en el taller</p>
           </div>
           <button class="btn btn-primary" id="btn-modal-nuevo-cliente">
             <i class="fas fa-user-plus"></i> NUEVO CLIENTE
           </button>
         </div>
 
-        <div class="search-box" style="margin-bottom: 1.5rem;">
+        <div class="search-box mb-1-5">
           <i class="fas fa-search"></i>
           <input type="text" id="search-clientes" class="search-input" placeholder="Buscar cliente por nombre, teléfono o cédula...">
         </div>
@@ -275,14 +275,14 @@
         <div class="action-bar">
           <div>
             <h2>Bitácora de Vehículos</h2>
-            <p style="color: var(--text-muted); font-size: 0.85rem;">Historial completo por vehículo (Marca, Placa, Modelo)</p>
+            <p class="text-subtitle-muted">Historial completo por vehículo (Marca, Placa, Modelo)</p>
           </div>
           <button class="btn btn-primary" id="btn-modal-nuevo-vehiculo">
             <i class="fas fa-car-side"></i> NUEVO VEHÍCULO
           </button>
         </div>
 
-        <div class="search-box" style="margin-bottom: 1.5rem;">
+        <div class="search-box mb-1-5">
           <i class="fas fa-search"></i>
           <input type="text" id="search-vehiculos" class="search-input" placeholder="Buscar vehículo por placa, marca, modelo o cliente...">
         </div>
@@ -314,7 +314,7 @@
             <i class="fas fa-arrow-left"></i> Volver a Lista de Órdenes
           </button>
 
-          <div style="display: flex; gap: 0.5rem;">
+          <div class="flex-gap-0-5">
             <button class="btn btn-secondary btn-sm" id="btn-subir-foto-orden">
               <i class="fas fa-camera"></i> Subir Foto Evidencia
             </button>
@@ -336,7 +336,7 @@
   <div id="modal-nueva-orden" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-container">
       <div class="modal-header">
-        <h3><i class="fas fa-plus-circle" style="color: var(--color-accent-red);"></i> Registro de Nuevo Ingreso de Vehículo</h3>
+        <h3><i class="fas fa-plus-circle icon-red"></i> Registro de Nuevo Ingreso de Vehículo</h3>
         <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
       </div>
 
@@ -347,7 +347,7 @@
             <select id="select-orden-cliente" class="form-control" required>
               <option value="">-- Clic para seleccionar cliente --</option>
             </select>
-            <p style="font-size: 0.82rem; color: var(--color-secondary); margin-top: 0.3rem; cursor: pointer; font-weight: 600;" id="btn-quick-crear-cliente">
+            <p class="btn-quick-link" id="btn-quick-crear-cliente">
               + ¿Cliente nuevo? Haz clic aquí para registrarlo primero.
             </p>
           </div>
@@ -357,7 +357,7 @@
             <select id="select-orden-vehiculo" class="form-control" required disabled>
               <option value="">-- Primero selecciona un cliente --</option>
             </select>
-            <p style="font-size: 0.82rem; color: var(--color-secondary); margin-top: 0.3rem; cursor: pointer; font-weight: 600;" id="btn-quick-crear-vehiculo">
+            <p class="btn-quick-link" id="btn-quick-crear-vehiculo">
               + ¿Vehículo nuevo? Haz clic aquí para agregarlo a este cliente.
             </p>
           </div>
@@ -390,7 +390,7 @@
   <div id="modal-nuevo-cliente" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-container">
       <div class="modal-header">
-        <h3><i class="fas fa-user-plus" style="color: var(--color-primary);"></i> Registrar Nuevo Cliente</h3>
+        <h3><i class="fas fa-user-plus icon-primary"></i> Registrar Nuevo Cliente</h3>
         <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
       </div>
 
@@ -435,7 +435,7 @@
   <div id="modal-nuevo-vehiculo" class="modal-overlay hidden" role="dialog" aria-modal="true">
     <div class="modal-container">
       <div class="modal-header">
-        <h3><i class="fas fa-car" style="color: var(--color-primary);"></i> Registrar Nuevo Vehículo</h3>
+        <h3><i class="fas fa-car icon-primary"></i> Registrar Nuevo Vehículo</h3>
         <button class="close-btn modal-close" aria-label="Cerrar modal">&times;</button>
       </div>
 
@@ -597,8 +597,8 @@
             <input type="file" id="foto-input" class="form-control" accept="image/*" capture="environment" required>
           </div>
 
-          <div id="foto-preview-container" style="text-align: center; margin: 1rem 0; display: none;">
-            <img id="foto-preview-img" style="max-width: 100%; max-height: 250px; border-radius: 8px; border: 1px solid var(--border-color);" src="" alt="Vista previa">
+          <div id="foto-preview-container" class="foto-preview-box">
+            <img id="foto-preview-img" class="foto-preview-img" src="" alt="Vista previa">
           </div>
 
           <div class="form-group">
@@ -617,7 +617,7 @@
 
   <!-- MODAL: IMPRESIÓN DE CONSTANCIA -->
   <div id="print-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
-    <div class="modal-container" style="max-width: 850px;">
+    <div class="modal-container modal-container-lg">
       <div class="modal-header no-print">
         <h3><i class="fas fa-print"></i> Vista Previa de Constancia Imprimible</h3>
         <div>
@@ -626,7 +626,7 @@
         </div>
       </div>
 
-      <div class="modal-body" id="print-modal-content" style="padding: 0;">
+      <div class="modal-body p-0" id="print-modal-content">
         <!-- Se genera con PRINT_MODULE.generateReceiptHtml() -->
       </div>
     </div>

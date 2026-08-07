@@ -1574,3 +1574,78 @@ a {
     max-width: 100%;
   }
 }
+
+/* CLASES UTILITARIAS Y DE ESTRUCTURA (FASE 6) */
+.text-subtitle-muted {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.btn-quick-link {
+  font-size: 0.82rem;
+  color: var(--color-secondary);
+  margin-top: 0.3rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+.modal-container-lg {
+  max-width: 850px;
+}
+.p-0 {
+  padding: 0 !important;
+}
+.mb-1-5 {
+  margin-bottom: 1.5rem !important;
+}
+.mt-1-5 {
+  margin-top: 1.5rem !important;
+}
+.icon-online {
+  color: #10B981;
+}
+.icon-red {
+  color: var(--color-accent-red);
+}
+.icon-primary {
+  color: var(--color-primary);
+}
+.btn-banner-close {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+.foto-preview-box {
+  text-align: center;
+  margin: 1rem 0;
+  display: none;
+}
+.foto-preview-img {
+  max-width: 100%;
+  max-height: 250px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+.w-100 {
+  width: 100% !important;
+}
+.w-auto {
+  width: auto !important;
+}
+.mt-0-5 {
+  margin-top: 0.5rem !important;
+}
+.flex-gap-0-5 {
+  display: flex;
+  gap: 0.5rem;
+}
+.flex-between-center {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.login-footer-text {
+  margin-top: 1.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+

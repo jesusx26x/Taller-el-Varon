@@ -136,12 +136,12 @@ function applyOp(db, op) {
         const cant = Number(s.cantidad) || 1, precio = Number(s.precioUnitario) || 0, sub = cant * precio; total += sub;
         upsertArr(db.detalleServicios, { id: s.id, uuid: s.uuid || s.id, ordenId: d.id, tipo: s.tipo || "Servicio", descripcion: s.descripcion || "", cantidad: cant, precioUnitario: precio, subtotal: sub, deleted: false, createdAt: d.createdAt, updatedAt: d.updatedAt });
       });
-      upsertArr(db.ordenes, { id: d.id, uuid: d.uuid || d.id, clienteId: d.clienteId, vehiculoId: d.vehiculoId, fechaIngreso: d.fechaIngreso || nowISO(), fechaEntrega: "", estado: d.estado || "Pendiente", motivoVisita: d.motivoVisita || "", diagnostico: d.diagnostico || "", kilometrajeEntrada: Number(d.kilometrajeEntrada) || 0, montoTotal: total, notas: d.notas || "", deleted: false, createdAt: d.createdAt, updatedAt: d.updatedAt });
+      upsertArr(db.ordenes, { id: d.id, uuid: d.uuid || d.id, clienteId: d.clienteId, vehiculoId: d.vehiculoId, fechaIngreso: d.fechaIngreso || nowISO(), fechaEntrega: "", estado: d.estado || (typeof UTILS !== "undefined" && UTILS.ESTADOS_ORDEN ? UTILS.ESTADOS_ORDEN.PENDIENTE : "Pendiente"), motivoVisita: d.motivoVisita || "", diagnostico: d.diagnostico || "", kilometrajeEntrada: Number(d.kilometrajeEntrada) || 0, montoTotal: total, notas: d.notas || "", deleted: false, createdAt: d.createdAt, updatedAt: d.updatedAt });
       break;
     }
     case "actualizarEstadoOrden": {
       const o = db.ordenes.find(x => eq(x.id, d.ordenId));
-      if (o) { o.estado = d.nuevoEstado; o.fechaEntrega = d.nuevoEstado === "Entregado" ? (d.fechaEntrega || nowISO()) : ""; o.updatedAt = d.updatedAt || nowISO(); }
+      if (o) { o.estado = d.nuevoEstado; o.fechaEntrega = d.nuevoEstado === (typeof UTILS !== "undefined" && UTILS.ESTADOS_ORDEN ? UTILS.ESTADOS_ORDEN.ENTREGADO : "Entregado") ? (d.fechaEntrega || nowISO()) : ""; o.updatedAt = d.updatedAt || nowISO(); }
       break;
     }
     case "agregarServicioAOrden": {
