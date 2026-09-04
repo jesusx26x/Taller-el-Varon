@@ -647,6 +647,7 @@ function editarServicioDetalle(data) {
       if (rows[i][0] == data.id) {
         const cant = Number(data.cantidad) || 1;
         const precio = Number(data.precioUnitario) || 0;
+        const subtotal = cant * precio;
         const ordCol = headers.indexOf("ordenId");
         const ordenId = ordCol >= 0 ? rows[i][ordCol] : rows[i][1];
         const map = {
