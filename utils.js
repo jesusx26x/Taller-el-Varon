@@ -177,36 +177,8 @@ const UTILS = {
   /**
    * Convertir archivo input de imagen a Base64 optimizado
    */
-  compressAndConvertImage: (file, maxWidth = 1000, quality = 0.75) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (e) => {
-        const img = new Image();
-        img.src = e.target.result;
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          let width = img.width;
-          let height = img.height;
-
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
-
-          const base64 = canvas.toDataURL("image/jpeg", quality);
-          resolve(base64);
-        };
-        img.onerror = (err) => reject(err);
-      };
-      reader.onerror = (err) => reject(err);
-    });
+  compressAndConvertImage: (file, maxWidth = 1280, quality = 0.8) => {
+    return UTILS.compressImage(file, maxWidth, maxWidth, quality).then(res => res.base64);
   },
 
   /**
@@ -311,3 +283,67 @@ UTILS.escapeHtml = function (s) {
     return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
   });
 };
+
+/**
+ * Normaliza una placa automotriz para comparaciones y búsquedas (ej: "A-123456" -> "A123456")
+ */
+UTILS.normalizePlaca = function (placa) {
+  return String(placa || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+};
+
+/**
+ * Redimensiona y comprime una imagen fotográfica en el cliente (HTML5 Canvas)
+ * Evita saturar la cuota de localStorage y timeouts en Google Apps Script.
+ * @param {File|Blob} file - Archivo de imagen original
+ * @param {number} maxWidth - Ancho máximo permitido (default 1280px)
+ * @param {number} maxHeight - Alto máximo permitido (default 1280px)
+ * @param {number} quality - Calidad JPEG (0.1 a 1.0, default 0.80)
+ * @returns {Promise<{base64: string, width: number, height: number}>}
+ */
+UTILS.compressImage = function (file, maxWidth = 1280, maxHeight = 1280, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.match(/image.*/)) {
+      return reject(new Error("El archivo no es una imagen válida"));
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Error al leer el archivo de imagen"));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Error al decodificar la imagen"));
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width / height > maxWidth / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            maxHeight = maxHeight;
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+        resolve({
+          base64: compressedBase64,
+          width: width,
+          height: height
+        });
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+

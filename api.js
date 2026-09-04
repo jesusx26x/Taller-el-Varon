@@ -36,6 +36,9 @@ const API = {
         if (json.status === "success" && json.data) {
           localStorage.setItem(CONFIG.TOKEN_KEY, json.data.token || "TOKEN_PABLO_ROSARIO");
           localStorage.setItem(CONFIG.USER_KEY, JSON.stringify(json.data));
+          if (typeof SYNC !== "undefined" && SYNC.retryAll) {
+            SYNC.retryAll();
+          }
           return json.data;
         } else { throw new Error(json.message || "Usuario o contraseña incorrectos"); }
       } catch (err) { console.warn("Fallo en login de nube. Intentando validación local:", err); }

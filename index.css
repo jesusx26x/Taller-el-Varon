@@ -1769,3 +1769,50 @@ body, #app-container, .login-screen { min-height: 100vh; min-height: 100dvh; }
 @media (max-width: 480px) {
   .modal-container { max-height: 100vh; max-height: 100dvh; min-height: 100dvh; }
 }
+
+/* BANNER DE ACTUALIZACIÓN PWA */
+.pwa-update-banner {
+  background: var(--color-primary);
+  color: #ffffff;
+  padding: 0.6rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 2px solid var(--color-accent-red);
+  box-shadow: var(--shadow-2);
+  z-index: 1000;
+}
+.pwa-update-content {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+.btn-pwa-reload {
+  background: var(--color-accent-red);
+  color: #ffffff;
+  border: none;
+  font-weight: 600;
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease;
+}
+.btn-pwa-reload:hover {
+  background: var(--color-accent-red-hover);
+}
+@media (max-width: 600px) {
+  .pwa-update-banner {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    gap: 0.5rem;
+  }
+  .pwa-update-content {
+    justify-content: center;
+  }
+}
+

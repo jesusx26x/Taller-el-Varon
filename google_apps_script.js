@@ -183,6 +183,15 @@ function upsertFilaPorId(sheet, rowArray) {
   return "insert";
 }
 
+// Convierte un objeto en un array mapeado exactamente según los encabezados reales de la hoja (Fila 1).
+function objetoAFilaHeaders(sheet, obj) {
+  if (!sheet) return [];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol === 0) return [];
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  return headers.map(header => obj[header] !== undefined ? obj[header] : "");
+}
+
 // Idempotencia por opId (evita reprocesar si la respuesta se perdió tras un timeout).
 function _getProcesados() {
   try { const raw = _props().getProperty("PROCESADOS"); const a = raw ? JSON.parse(raw) : []; return Array.isArray(a) ? a : []; }
@@ -405,6 +414,7 @@ function crearOrdenCompleta(data) {
 
     const ordenId = data.id || ("ORD-" + new Date().getFullYear() + "-" + String(sheetOrdenes.getLastRow()).padStart(4, "0"));
     const fechaIngreso = data.fechaIngreso || getDominicanDateISO();
+    const now = getDominicanDateISO();
     let montoTotal = 0;
 
     if (data.servicios && Array.isArray(data.servicios)) {
@@ -413,33 +423,44 @@ function crearOrdenCompleta(data) {
         montoTotal += itemSubtotal;
 
         const itemId = item.id || ("DET-" + ordenId + "-" + (index + 1));
-        upsertFilaPorId(sheetDetalle, [
-          itemId,
-          ordenId,
-          item.tipo || "Servicio",
-          item.descripcion || "",
-          item.cantidad || 1,
-          item.precioUnitario || 0,
-          itemSubtotal
-        ]);
+        const itemObj = {
+          id: itemId,
+          uuid: item.uuid || itemId,
+          ordenId: ordenId,
+          tipo: item.tipo || "Servicio",
+          descripcion: item.descripcion || "",
+          cantidad: Number(item.cantidad) || 1,
+          precioUnitario: Number(item.precioUnitario) || 0,
+          subtotal: itemSubtotal,
+          createdAt: item.createdAt || data.createdAt || now,
+          updatedAt: item.updatedAt || data.updatedAt || now,
+          deleted: false,
+          deletedAt: ""
+        };
+        upsertFilaPorId(sheetDetalle, objetoAFilaHeaders(sheetDetalle, itemObj));
       });
     }
 
-    const nuevaOrden = [
-      ordenId,
-      data.clienteId,
-      data.vehiculoId,
-      fechaIngreso,
-      "",
-      data.estado || "Pendiente",
-      data.motivoVisita || "",
-      data.diagnostico || "",
-      data.kilometrajeEntrada || 0,
-      montoTotal,
-      data.notas || ""
-    ];
+    const ordenObj = {
+      id: ordenId,
+      uuid: data.uuid || ordenId,
+      clienteId: data.clienteId,
+      vehiculoId: data.vehiculoId,
+      fechaIngreso: fechaIngreso,
+      fechaEntrega: data.fechaEntrega || "",
+      estado: data.estado || "Pendiente",
+      motivoVisita: data.motivoVisita || "",
+      diagnostico: data.diagnostico || "",
+      kilometrajeEntrada: Number(data.kilometrajeEntrada) || 0,
+      montoTotal: montoTotal,
+      notas: data.notas || "",
+      createdAt: data.createdAt || now,
+      updatedAt: data.updatedAt || now,
+      deleted: false,
+      deletedAt: ""
+    };
 
-    upsertFilaPorId(sheetOrdenes, nuevaOrden);
+    upsertFilaPorId(sheetOrdenes, objetoAFilaHeaders(sheetOrdenes, ordenObj));
 
     return {
       id: ordenId,
@@ -464,16 +485,22 @@ function actualizarEstadoOrden(ordenId, nuevoEstado, fechaEntrega) {
     const sheet = getSheetTolerant(ss, "Ordenes");
     const rows = sheet.getDataRange().getValues();
     const headers = rows[0] || [];
+    const estadoCol = headers.indexOf("estado");
+    const entregaCol = headers.indexOf("fechaEntrega");
     const uaCol = headers.indexOf("updatedAt");
+    const now = getDominicanDateISO();
+
     for (let i = 1; i < rows.length; i++) {
-      if (rows[i][0] == ordenId) {
-        sheet.getRange(i + 1, 6).setValue(nuevoEstado);
-        if (nuevoEstado === "Entregado" || fechaEntrega) {
-          sheet.getRange(i + 1, 5).setValue(fechaEntrega || getDominicanDateISO());
-        } else {
-          sheet.getRange(i + 1, 5).setValue("");
+      if (String(rows[i][0]) === String(ordenId)) {
+        if (estadoCol >= 0) sheet.getRange(i + 1, estadoCol + 1).setValue(nuevoEstado);
+        if (entregaCol >= 0) {
+          if (nuevoEstado === "Entregado" || fechaEntrega) {
+            sheet.getRange(i + 1, entregaCol + 1).setValue(fechaEntrega || now);
+          } else {
+            sheet.getRange(i + 1, entregaCol + 1).setValue("");
+          }
         }
-        if (uaCol >= 0) sheet.getRange(i + 1, uaCol + 1).setValue(getDominicanDateISO());
+        if (uaCol >= 0) sheet.getRange(i + 1, uaCol + 1).setValue(now);
         return { id: ordenId, estado: nuevoEstado };
       }
     }
@@ -484,34 +511,57 @@ function actualizarEstadoOrden(ordenId, nuevoEstado, fechaEntrega) {
 function agregarServicioAOrden(data) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetDetalle = getSheetTolerant(ss, "DetalleServicios");
-  const sheetOrdenes = getSheetTolerant(ss, "Ordenes");
-
   const subtotal = (Number(data.cantidad) || 1) * (Number(data.precioUnitario) || 0);
   const itemId = data.id || ("DET-" + Date.now());
+  const now = getDominicanDateISO();
 
-  upsertFilaPorId(sheetDetalle, [
-    itemId,
-    data.ordenId,
-    data.tipo || "Repuesto",
-    data.descripcion,
-    data.cantidad || 1,
-    data.precioUnitario || 0,
-    subtotal
-  ]);
+  const itemObj = {
+    id: itemId,
+    uuid: data.uuid || itemId,
+    ordenId: data.ordenId,
+    tipo: data.tipo || "Repuesto",
+    descripcion: data.descripcion || "",
+    cantidad: Number(data.cantidad) || 1,
+    precioUnitario: Number(data.precioUnitario) || 0,
+    subtotal: subtotal,
+    createdAt: data.createdAt || now,
+    updatedAt: data.updatedAt || now,
+    deleted: false,
+    deletedAt: ""
+  };
+
+  upsertFilaPorId(sheetDetalle, objetoAFilaHeaders(sheetDetalle, itemObj));
 
   const nuevoTotal = recalcularTotalOrden(ss, data.ordenId);
   return { id: itemId, ordenId: data.ordenId, nuevoTotal: nuevoTotal };
 }
 
 function subirFotoDrive(data) {
+  const fotoId = data.id || ("FOT-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase());
+  const fecha = data.fechaSubida || data.fecha || getDominicanDateISO();
+
   // Idempotencia: si ya existe una foto con este id (reintento), no re-subir.
   const ssFotoIdem = SpreadsheetApp.getActiveSpreadsheet();
   const sheetFotosIdem = getSheetTolerant(ssFotoIdem, "Fotos");
   if (data.id && sheetFotosIdem) {
     const filasIdem = sheetFotosIdem.getDataRange().getValues();
-    for (let i = 1; i < filasIdem.length; i++) {
-      if (String(filasIdem[i][0]) === String(data.id)) {
-        return { id: data.id, ordenId: filasIdem[i][1], driveFileId: filasIdem[i][2], url: filasIdem[i][3], fechaSubida: filasIdem[i][5] };
+    if (filasIdem.length > 1) {
+      const h = filasIdem[0] || [];
+      const ordCol = h.indexOf("ordenId");
+      const driveCol = h.indexOf("driveFileId");
+      const urlCol = h.indexOf("url");
+      const fSubidaCol = h.indexOf("fechaSubida");
+
+      for (let i = 1; i < filasIdem.length; i++) {
+        if (String(filasIdem[i][0]) === String(data.id)) {
+          return {
+            id: data.id,
+            ordenId: ordCol >= 0 ? filasIdem[i][ordCol] : filasIdem[i][1],
+            driveFileId: driveCol >= 0 ? filasIdem[i][driveCol] : filasIdem[i][2],
+            url: urlCol >= 0 ? filasIdem[i][urlCol] : filasIdem[i][3],
+            fechaSubida: fSubidaCol >= 0 ? filasIdem[i][fSubidaCol] : (filasIdem[i][5] || fecha)
+          };
+        }
       }
     }
   }
@@ -536,17 +586,22 @@ function subirFotoDrive(data) {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetFotos = getSheetTolerant(ss, "Fotos");
-  const fotoId = data.id || ("IMG-" + Date.now());
-  const fecha = getDominicanDateISO();
+  const fotoObj = {
+    id: fotoId,
+    uuid: data.uuid || fotoId,
+    ordenId: data.ordenId,
+    driveFileId: fileId,
+    url: fileUrl,
+    descripcion: data.descripcion || "",
+    fecha: fecha,
+    fechaSubida: fecha,
+    createdAt: data.createdAt || fecha,
+    updatedAt: data.updatedAt || fecha,
+    deleted: false,
+    deletedAt: ""
+  };
 
-  upsertFilaPorId(sheetFotos, [
-    fotoId,
-    data.ordenId,
-    fileId,
-    fileUrl,
-    data.descripcion || "",
-    fecha
-  ]);
+  upsertFilaPorId(sheetFotos, objetoAFilaHeaders(sheetFotos, fotoObj));
 
   return {
     id: fotoId,
@@ -557,16 +612,22 @@ function subirFotoDrive(data) {
   };
 }
 
-// Recalcula el montoTotal de una orden sumando sus detalles (columna 10 en Ordenes).
+// Recalcula el montoTotal de una orden sumando sus detalles y actualiza updatedAt.
 function recalcularTotalOrden(ss, ordenId) {
   const sheetDetalle = getSheetTolerant(ss, "DetalleServicios");
   const sheetOrdenes = getSheetTolerant(ss, "Ordenes");
-  const detalles = sheetToObjects(sheetDetalle).filter(d => d.ordenId == ordenId && !_esBorrado(d.deleted));
+  const detalles = sheetToObjects(sheetDetalle).filter(d => String(d.ordenId) === String(ordenId) && !_esBorrado(d.deleted));
   const total = detalles.reduce((s, i) => s + (Number(i.subtotal) || 0), 0);
-  const ordenes = sheetOrdenes.getDataRange().getValues();
-  for (let i = 1; i < ordenes.length; i++) {
-    if (ordenes[i][0] == ordenId) {
-      sheetOrdenes.getRange(i + 1, 10).setValue(total);
+  const rows = sheetOrdenes.getDataRange().getValues();
+  const headers = rows[0] || [];
+  const totalCol = headers.indexOf("montoTotal");
+  const uaCol = headers.indexOf("updatedAt");
+  const now = getDominicanDateISO();
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(ordenId)) {
+      if (totalCol >= 0) sheetOrdenes.getRange(i + 1, totalCol + 1).setValue(total);
+      if (uaCol >= 0) sheetOrdenes.getRange(i + 1, uaCol + 1).setValue(now);
       break;
     }
   }
@@ -586,8 +647,8 @@ function editarServicioDetalle(data) {
       if (rows[i][0] == data.id) {
         const cant = Number(data.cantidad) || 1;
         const precio = Number(data.precioUnitario) || 0;
-        const subtotal = cant * precio;
-        const ordenId = rows[i][1];
+        const ordCol = headers.indexOf("ordenId");
+        const ordenId = ordCol >= 0 ? rows[i][ordCol] : rows[i][1];
         const map = {
           id: rows[i][0],
           ordenId: ordenId,
@@ -628,29 +689,28 @@ function eliminarServicioDetalle(data) {
   }
 }
 
-// Borra todas las filas de una hoja cuyo valor en 'colIndex1based' coincida.
-function borrarFilasPorColumna(sheet, colIndex1based, valor) {
-  if (!sheet) return 0;
-  const rows = sheet.getDataRange().getValues();
-  let borradas = 0;
-  for (let i = rows.length - 1; i >= 1; i--) {
-    if (rows[i][colIndex1based - 1] == valor) {
-      sheet.deleteRow(i + 1);
-      borradas++;
-    }
-  }
-  return borradas;
-}
-
 // Elimina una orden y en cascada sus detalles y sus fotos (evita huérfanos).
 function eliminarOrdenCascada(ordenId) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) throw new Error("Sistema ocupado, reintente");
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    borrarPorColumna(getSheetTolerant(ss, "DetalleServicios"), 2, ordenId); // col ordenId
-    borrarPorColumna(getSheetTolerant(ss, "Fotos"), 2, ordenId);            // col ordenId
-    borrarPorColumna(getSheetTolerant(ss, "Ordenes"), 1, ordenId);          // col id
+    const sheetDet = getSheetTolerant(ss, "DetalleServicios");
+    const sheetFot = getSheetTolerant(ss, "Fotos");
+    const sheetOrd = getSheetTolerant(ss, "Ordenes");
+
+    const getCol1Based = (s, headerName, default1Based) => {
+      if (!s) return default1Based;
+      const lastCol = s.getLastColumn();
+      if (lastCol === 0) return default1Based;
+      const headers = s.getRange(1, 1, 1, lastCol).getValues()[0] || [];
+      const idx = headers.indexOf(headerName);
+      return idx >= 0 ? idx + 1 : default1Based;
+    };
+
+    borrarPorColumna(sheetDet, getCol1Based(sheetDet, "ordenId", 2), ordenId);
+    borrarPorColumna(sheetFot, getCol1Based(sheetFot, "ordenId", 2), ordenId);
+    borrarPorColumna(sheetOrd, getCol1Based(sheetOrd, "id", 1), ordenId);
     return { id: ordenId, eliminado: true };
   } finally {
     lock.releaseLock();

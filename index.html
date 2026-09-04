@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Taller Pablo Rosario - El Varón — Sistema de Gestión Mecánica</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="index.css?v=6.4">
+  <link rel="stylesheet" href="index.css?v=6.6">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
@@ -77,11 +77,23 @@
         <div class="user-badge">
           <i class="fas fa-user-circle"></i> Pablo Rosario
         </div>
+        <button id="btn-export-backup" class="btn btn-sm btn-logout" title="Exportar copia de seguridad (JSON)" aria-label="Exportar copia de seguridad">
+          <i class="fas fa-download"></i>
+        </button>
         <button id="btn-logout" class="btn btn-sm btn-logout" title="Cerrar sesión" aria-label="Cerrar sesión">
           <i class="fas fa-power-off"></i>
         </button>
       </div>
     </header>
+
+    <!-- BANNER DE ACTUALIZACIÓN DISPONIBLE (PWA) -->
+    <div id="pwa-update-banner" class="pwa-update-banner" style="display: none;">
+      <div class="pwa-update-content">
+        <i class="fas fa-sync-alt fa-spin"></i>
+        <span>Hay una nueva versión de Taller El Varón disponible.</span>
+      </div>
+      <button id="btn-pwa-reload" class="btn btn-sm btn-pwa-reload">Actualizar ahora</button>
+    </div>
 
     <!-- CONTENIDO PRINCIPAL -->
     <main class="main-content">
@@ -599,8 +611,8 @@
         <input type="hidden" id="foto-orden-id">
         <div class="modal-body">
           <div class="form-group">
-            <label for="foto-input">Tomar foto o seleccionar archivo *</label>
-            <input type="file" id="foto-input" class="form-control" accept="image/*" required>
+            <label for="foto-input">Tomar foto con cámara o seleccionar archivo *</label>
+            <input type="file" id="foto-input" class="form-control" accept="image/*" capture="environment" required>
           </div>
 
           <div id="foto-preview-container" class="foto-preview-box">
@@ -664,22 +676,55 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <!-- SCRIPTS -->
-  <script src="utils.js?v=6.4"></script>
-  <script src="store.js?v=6.4"></script>
-  <script src="sync.js?v=6.4"></script>
-  <script src="api.js?v=6.4"></script>
-  <script src="print.js?v=6.4"></script>
-  <script src="app.js?v=6.4"></script>
+  <script src="utils.js?v=6.6"></script>
+  <script src="store.js?v=6.6"></script>
+  <script src="sync.js?v=6.6"></script>
+  <script src="api.js?v=6.6"></script>
+  <script src="print.js?v=6.6"></script>
+  <script src="app.js?v=6.6"></script>
 
 
-  <!-- FASE 5: PWA offline real (registro del service worker) -->
+  <!-- FASE 5: PWA offline real (registro del service worker y detector de actualizaciones) -->
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
-        navigator.serviceWorker.register("sw.js").catch(function (e) {
+        navigator.serviceWorker.register("sw.js").then(function (reg) {
+          reg.addEventListener("updatefound", function () {
+            const nuevoSW = reg.installing;
+            if (nuevoSW) {
+              nuevoSW.addEventListener("statechange", function () {
+                if (nuevoSW.state === "installed" && navigator.serviceWorker.controller) {
+                  const banner = document.getElementById("pwa-update-banner");
+                  if (banner) banner.style.display = "flex";
+                }
+              });
+            }
+          });
+        }).catch(function (e) {
           console.warn("Service worker no registrado:", e);
         });
       });
+
+      let recargando = false;
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        if (!recargando) {
+          recargando = true;
+          window.location.reload();
+        }
+      });
+
+      const btnReload = document.getElementById("btn-pwa-reload");
+      if (btnReload) {
+        btnReload.addEventListener("click", function () {
+          navigator.serviceWorker.getRegistration().then(function (reg) {
+            if (reg && reg.waiting) {
+              reg.waiting.postMessage({ type: "SKIP_WAITING" });
+            } else {
+              window.location.reload();
+            }
+          });
+        });
+      }
     }
   </script>
 

@@ -372,12 +372,15 @@ function ejecutarBusquedaGlobal() {
     String(c.cedula || '').toLowerCase().includes(query)
   );
 
-  const matchVehiculos = vehiculos.filter(v =>
-    String(v.placa || '').toLowerCase().includes(query) ||
-    String(v.marca || '').toLowerCase().includes(query) ||
-    String(v.modelo || '').toLowerCase().includes(query) ||
-    String(v.vin || '').toLowerCase().includes(query)
-  );
+  const cleanPlacaQuery = UTILS.normalizePlaca ? UTILS.normalizePlaca(query) : "";
+  const matchVehiculos = vehiculos.filter(v => {
+    const cleanPlaca = UTILS.normalizePlaca ? UTILS.normalizePlaca(v.placa) : "";
+    return String(v.placa || '').toLowerCase().includes(query) ||
+      (cleanPlacaQuery && cleanPlaca.includes(cleanPlacaQuery)) ||
+      String(v.marca || '').toLowerCase().includes(query) ||
+      String(v.modelo || '').toLowerCase().includes(query) ||
+      String(v.vin || '').toLowerCase().includes(query);
+  });
 
   const matchOrdenes = ordenes.filter(o =>
     String(o.id || '').toLowerCase().includes(query) ||
@@ -444,11 +447,13 @@ function renderListaOrdenes() {
     const veh = vehiculos.find(v => String(v.id) === String(ord.vehiculoId)) || {};
 
     const matchVeh = !STATE.filterVehiculoId || String(ord.vehiculoId) === String(STATE.filterVehiculoId);
-    const matchState = estadoFilter === "TODOS" || ord.estado === estadoFilter;
+    const cleanPlacaQuery = UTILS.normalizePlaca ? UTILS.normalizePlaca(query) : "";
+    const cleanPlaca = UTILS.normalizePlaca ? UTILS.normalizePlaca(veh.placa) : "";
     const matchSearch = !query ||
       String(ord.id || '').toLowerCase().includes(query) ||
       String(cli.nombre || '').toLowerCase().includes(query) ||
       String(veh.placa || '').toLowerCase().includes(query) ||
+      (cleanPlacaQuery && cleanPlaca.includes(cleanPlacaQuery)) ||
       String(veh.marca || '').toLowerCase().includes(query) ||
       String(veh.modelo || '').toLowerCase().includes(query);
 
@@ -622,11 +627,14 @@ function renderListaVehiculos() {
   const clientes = STATE.db.clientes || [];
   const ordenes = STATE.db.ordenes || [];
   const query = (document.getElementById("search-vehiculos").value || "").toLowerCase();
+  const cleanPlacaQuery = UTILS.normalizePlaca ? UTILS.normalizePlaca(query) : "";
 
   const filtrados = vehiculos.filter(v => {
     const cli = clientes.find(c => String(c.id) === String(v.clienteId)) || {};
+    const cleanPlaca = UTILS.normalizePlaca ? UTILS.normalizePlaca(v.placa) : "";
     return !query ||
       String(v.placa || '').toLowerCase().includes(query) ||
+      (cleanPlacaQuery && cleanPlaca.includes(cleanPlacaQuery)) ||
       String(v.marca || '').toLowerCase().includes(query) ||
       String(v.modelo || '').toLowerCase().includes(query) ||
       String(cli.nombre || '').toLowerCase().includes(query);
@@ -1017,10 +1025,37 @@ async function cambiarEstadoOrden(ordenId, nuevoEstado) {
   }
 }
 
+function exportarRespaldoJSON() {
+  try {
+    const db = API.getLocalStore();
+    const jsonStr = JSON.stringify(db, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    const fecha = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+    a.href = url;
+    a.download = `Taller_El_Varon_Respaldo_${fecha}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    UTILS.showToast("Copia de seguridad descargada con éxito");
+  } catch (err) {
+    console.error("Error al exportar respaldo:", err);
+    UTILS.showToast("No se pudo generar el archivo de respaldo", "error");
+  }
+}
+
 // -------------------------------------------------------------
 // EVENT LISTENERS & FORM HANDLERS
 // -------------------------------------------------------------
 function initEventListeners() {
+
+  // Botón Exportar Copia de Seguridad
+  const btnBackup = document.getElementById("btn-export-backup");
+  if (btnBackup) btnBackup.onclick = exportarRespaldoJSON;
 
   // Indicador de sincronización (Fase 3-4)
   window.addEventListener("taller-sync", (e) => actualizarBadgeSync(e.detail));
@@ -1377,11 +1412,41 @@ function initEventListeners() {
     }
   });
 
-  // Cierre de Modales (clic en X o backdrop o Escape)
+  // Cierre de Modales y soporte para botón "Atrás" en móviles
+  const modalObserver = new MutationObserver((mutations) => {
+    mutations.forEach(m => {
+      if (m.attributeName === "class") {
+        const target = m.target;
+        if (target.classList.contains("modal-overlay") && !target.classList.contains("hidden")) {
+          try {
+            if (!history.state || !history.state.modalOpen) {
+              history.pushState({ modalOpen: true, modalId: target.id }, "");
+            }
+          } catch (e) {}
+        }
+      }
+    });
+  });
+  document.querySelectorAll(".modal-overlay").forEach(overlay => {
+    modalObserver.observe(overlay, { attributes: true });
+  });
+
+  window.addEventListener("popstate", (e) => {
+    const modalesAbiertos = document.querySelectorAll(".modal-overlay:not(.hidden)");
+    if (modalesAbiertos.length > 0) {
+      modalesAbiertos.forEach(m => m.classList.add("hidden"));
+    }
+  });
+
   document.querySelectorAll(".modal-close").forEach(btn => {
     btn.onclick = (e) => {
       const modal = e.target.closest(".modal-overlay");
-      if (modal) modal.classList.add("hidden");
+      if (modal) {
+        modal.classList.add("hidden");
+        if (history.state && history.state.modalOpen) {
+          try { history.back(); } catch (err) {}
+        }
+      }
     };
   });
 
@@ -1389,13 +1454,22 @@ function initEventListeners() {
     overlay.onclick = (e) => {
       if (e.target === overlay) {
         overlay.classList.add("hidden");
+        if (history.state && history.state.modalOpen) {
+          try { history.back(); } catch (err) {}
+        }
       }
     };
   });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      document.querySelectorAll(".modal-overlay").forEach(m => m.classList.add("hidden"));
+      const abiertos = document.querySelectorAll(".modal-overlay:not(.hidden)");
+      if (abiertos.length > 0) {
+        abiertos.forEach(m => m.classList.add("hidden"));
+        if (history.state && history.state.modalOpen) {
+          try { history.back(); } catch (err) {}
+        }
+      }
     }
   });
 

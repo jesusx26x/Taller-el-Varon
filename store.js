@@ -85,10 +85,37 @@ function memDb() { if (!MEM) MEM = _readLocalDb(); return MEM; }
 function outbox() { if (!OUTBOX) OUTBOX = _readLocalOutbox(); return OUTBOX; }
 function setMem(db) { MEM = sanitizeDb(db); }
 function persist() {
-  try { localStorage.setItem(CONFIG.LOCAL_DB_KEY, JSON.stringify(MEM)); } catch (e) { /* cuota (fotos) */ }
+  try {
+    localStorage.setItem(CONFIG.LOCAL_DB_KEY, JSON.stringify(MEM));
+  } catch (e) {
+    // Si falla por cuota (típicamente fotos Base64), guarda los datos críticos omitiendo Base64 pesados en localStorage
+    try {
+      const lightweight = Object.assign({}, MEM, {
+        fotos: (MEM.fotos || []).map(f => Object.assign({}, f, { url: (f.driveFileId || (f.url && !f.url.startsWith("data:"))) ? f.url : "" }))
+      });
+      localStorage.setItem(CONFIG.LOCAL_DB_KEY, JSON.stringify(lightweight));
+    } catch (e2) {
+      console.warn("Cuota de localStorage excedida; persistiendo únicamente en IndexedDB:", e2);
+    }
+  }
   try { localStorage.setItem(CONFIG.OUTBOX_KEY, JSON.stringify(OUTBOX)); } catch (e) { }
   IDB.set("db", MEM); IDB.set("outbox", OUTBOX);
 }
+
+function resetErroresOutbox() {
+  const q = outbox();
+  let cambiado = false;
+  q.forEach(op => {
+    if (op.error || (op.tries && op.tries > 0)) {
+      op.error = false;
+      op.tries = 0;
+      delete op.lastError;
+      cambiado = true;
+    }
+  });
+  if (cambiado) persist();
+}
+
 
 /* ---------------- Modelo: sellado, colecciones, tombstones ---------------- */
 // Añade uuid/createdAt/updatedAt (no pisa lo existente). isNew agrega createdAt.
@@ -214,6 +241,6 @@ function mergeDelta(data) {
 const STORE = {
   CONFIG, ready: ensureReady, memDb, outbox, setMem, persist, applyOp, stamp,
   visibleDb, sanitizeDb, recalcTotal, eq, nowISO, uid, folioOrden,
-  getSince, setSince, maxUpdatedAt, mergeDelta, upsertArr
+  getSince, setSince, maxUpdatedAt, mergeDelta, upsertArr, resetErroresOutbox
 };
 if (typeof window !== "undefined") window.STORE = STORE;

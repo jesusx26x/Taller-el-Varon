@@ -112,7 +112,17 @@ async function _flushPorOperacion(q) {
   }
 }
 
-const SYNC = { flush, emit, post, isSyncing: () => SYNCING };
+function retryAll() {
+  if (typeof STORE !== "undefined" && STORE.resetErroresOutbox) {
+    STORE.resetErroresOutbox();
+  }
+  _backoff = 0;
+  if (_retryTimer) { clearTimeout(_retryTimer); _retryTimer = null; }
+  emit();
+  return flush();
+}
+
+const SYNC = { flush, emit, post, isSyncing: () => SYNCING, retryAll };
 if (typeof window !== "undefined") window.SYNC = SYNC;
 
 // Arranque y reacción a cambios de conectividad.
