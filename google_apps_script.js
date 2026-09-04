@@ -189,7 +189,18 @@ function objetoAFilaHeaders(sheet, obj) {
   const lastCol = sheet.getLastColumn();
   if (lastCol === 0) return [];
   const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  return headers.map(header => obj[header] !== undefined ? obj[header] : "");
+  return headers.map(header => {
+    let val = obj[header];
+    if (val === undefined || val === null) return "";
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      // Prevenir inyección o errores de fórmulas en Google Sheets (ej: +1 809..., =SUMA, etc.)
+      if (trimmed.startsWith("+") || trimmed.startsWith("=") || (trimmed.startsWith("-") && isNaN(Number(trimmed)))) {
+        return "'" + trimmed;
+      }
+    }
+    return val;
+  });
 }
 
 // Idempotencia por opId (evita reprocesar si la respuesta se perdió tras un timeout).
@@ -294,14 +305,139 @@ function borrarPorColumna(sheet, colIndex1based, valor) {
   return n;
 }
 
+function migrarYRepararDatos(ss) {
+  try {
+    const sheetCli = getSheetTolerant(ss, "Clientes");
+    const sheetVeh = getSheetTolerant(ss, "Vehiculos");
+    const sheetOrd = getSheetTolerant(ss, "Ordenes");
+    if (!sheetCli) return;
+
+    const rowsCli = sheetCli.getDataRange().getValues();
+    if (rowsCli.length <= 1) return;
+    const hCli = rowsCli[0];
+    const idCol = hCli.indexOf("id");
+    const telCol = hCli.indexOf("telefono");
+    const uuidCol = hCli.indexOf("uuid");
+
+    let idMap = {};
+    let maxCliNum = 0;
+
+    for (let i = 1; i < rowsCli.length; i++) {
+      const idVal = String(rowsCli[i][idCol >= 0 ? idCol : 0] || "");
+      const m = idVal.match(/^CLI-(\d+)$/i);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > maxCliNum) maxCliNum = n;
+      }
+    }
+
+    for (let i = 1; i < rowsCli.length; i++) {
+      const idVal = String(rowsCli[i][idCol >= 0 ? idCol : 0] || "");
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(idVal)) {
+        maxCliNum++;
+        const nuevoId = "CLI-" + String(maxCliNum).padStart(4, "0");
+        idMap[idVal] = nuevoId;
+        if (idCol >= 0) sheetCli.getRange(i + 1, idCol + 1).setValue(nuevoId);
+        if (uuidCol >= 0 && (!rowsCli[i][uuidCol] || rowsCli[i][uuidCol] === "")) {
+          sheetCli.getRange(i + 1, uuidCol + 1).setValue(idVal);
+        }
+      }
+
+      if (telCol >= 0) {
+        const telVal = String(rowsCli[i][telCol] || "");
+        if (telVal === "#ERROR!" || telVal.startsWith("#") || telVal.startsWith("+") || telVal.startsWith("=")) {
+          const digits = telVal.replace(/\D/g, "");
+          let cleanTel = "";
+          if (digits.length === 10) {
+            cleanTel = "(" + digits.slice(0, 3) + ") " + digits.slice(3, 6) + "-" + digits.slice(6);
+          } else if (digits.length === 11 && digits.startsWith("1")) {
+            cleanTel = "(" + digits.slice(1, 4) + ") " + digits.slice(4, 7) + "-" + digits.slice(7);
+          } else {
+            cleanTel = telVal.replace(/^[+=]+/, "").replace(/#ERROR!/gi, "").trim();
+          }
+          sheetCli.getRange(i + 1, telCol + 1).setValue(cleanTel ? "'" + cleanTel : "");
+        }
+      }
+    }
+
+    if (Object.keys(idMap).length > 0) {
+      if (sheetVeh) {
+        const rowsVeh = sheetVeh.getDataRange().getValues();
+        const hVeh = rowsVeh[0] || [];
+        const cliColVeh = hVeh.indexOf("clienteId");
+        if (cliColVeh >= 0) {
+          for (let i = 1; i < rowsVeh.length; i++) {
+            const vCli = String(rowsVeh[i][cliColVeh]);
+            if (idMap[vCli]) sheetVeh.getRange(i + 1, cliColVeh + 1).setValue(idMap[vCli]);
+          }
+        }
+      }
+      if (sheetOrd) {
+        const rowsOrd = sheetOrd.getDataRange().getValues();
+        const hOrd = rowsOrd[0] || [];
+        const cliColOrd = hOrd.indexOf("clienteId");
+        if (cliColOrd >= 0) {
+          for (let i = 1; i < rowsOrd.length; i++) {
+            const oCli = String(rowsOrd[i][cliColOrd]);
+            if (idMap[oCli]) sheetOrd.getRange(i + 1, cliColOrd + 1).setValue(idMap[oCli]);
+          }
+        }
+      }
+    }
+
+    if (sheetVeh) {
+      const rowsVeh = sheetVeh.getDataRange().getValues();
+      const hVeh = rowsVeh[0] || [];
+      const idColVeh = hVeh.indexOf("id");
+      const uuidColVeh = hVeh.indexOf("uuid");
+      let maxVehNum = 0;
+      let vehMap = {};
+      for (let i = 1; i < rowsVeh.length; i++) {
+        const idVal = String(rowsVeh[i][idColVeh >= 0 ? idColVeh : 0] || "");
+        const m = idVal.match(/^VEH-(\d+)$/i);
+        if (m) {
+          const n = parseInt(m[1], 10);
+          if (n > maxVehNum) maxVehNum = n;
+        }
+      }
+      for (let i = 1; i < rowsVeh.length; i++) {
+        const idVal = String(rowsVeh[i][idColVeh >= 0 ? idColVeh : 0] || "");
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(idVal)) {
+          maxVehNum++;
+          const nuevoVehId = "VEH-" + String(maxVehNum).padStart(4, "0");
+          vehMap[idVal] = nuevoVehId;
+          if (idColVeh >= 0) sheetVeh.getRange(i + 1, idColVeh + 1).setValue(nuevoVehId);
+          if (uuidColVeh >= 0 && (!rowsVeh[i][uuidColVeh] || rowsVeh[i][uuidColVeh] === "")) {
+            sheetVeh.getRange(i + 1, uuidColVeh + 1).setValue(idVal);
+          }
+        }
+      }
+      if (Object.keys(vehMap).length > 0 && sheetOrd) {
+        const rowsOrd = sheetOrd.getDataRange().getValues();
+        const hOrd = rowsOrd[0] || [];
+        const vehColOrd = hOrd.indexOf("vehiculoId");
+        if (vehColOrd >= 0) {
+          for (let i = 1; i < rowsOrd.length; i++) {
+            const oVeh = String(rowsOrd[i][vehColOrd]);
+            if (vehMap[oVeh]) sheetOrd.getRange(i + 1, vehColOrd + 1).setValue(vehMap[oVeh]);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error en migrarYRepararDatos:", err);
+  }
+}
+
 function obtenerTodoElSistema(desde) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Repara automáticamente filas previas con UUIDs o fórmulas erróneas (#ERROR!)
+  migrarYRepararDatos(ss);
 
   const safeRead = function(name) {
     try {
       let objs = sheetToObjects(getSheetTolerant(ss, name));
       if (desde) {
-        // Delta: solo filas cambiadas desde 'desde'. Filas sin updatedAt siempre se incluyen.
         objs = objs.filter(function (o) { return !o.updatedAt || String(o.updatedAt) > String(desde); });
       }
       return objs;
@@ -334,7 +470,12 @@ function sheetToObjects(sheet) {
     if (!row[0]) continue;
     const obj = {};
     headers.forEach((header, index) => {
-      obj[header] = row[index];
+      let val = row[index];
+      if (typeof val === "string") {
+        if (val.startsWith("'")) val = val.slice(1);
+        if (val === "#ERROR!" || val.startsWith("#ERROR")) val = "";
+      }
+      obj[header] = val;
     });
     objects.push(obj);
   }
@@ -367,16 +508,20 @@ function crearRegistro(nombreHoja, data, prefijo) {
 
     const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
 
-    // Usa el id que envía el cliente (UUID) si viene; si no, genera uno.
-    if (!data.id) data.id = prefijo + "-" + String(sheet.getLastRow()).padStart(4, "0");
+    // Usa el id que envía el cliente si es legible (CLI-XXXX, VEH-XXXX). Si viene vacío o es un UUID largo, genera uno limpio.
+    const isLongUuid = data.id && /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(data.id);
+    if (!data.id || isLongUuid) {
+      if (!data.uuid && data.id) data.uuid = data.id;
+      data.id = prefijo + "-" + String(sheet.getLastRow()).padStart(4, "0");
+    }
 
     if (nombreHoja === "Clientes" && !data.fechaRegistro) {
       try { data.fechaRegistro = Utilities.formatDate(new Date(), "America/Santo_Domingo", "yyyy-MM-dd"); }
       catch (e) { data.fechaRegistro = getDominicanDateISO().split("T")[0]; }
     }
 
-    // UPSERT por id (idempotente).
-    const rowToInsert = headers.map(header => data[header] !== undefined ? data[header] : "");
+    // UPSERT por id (idempotente y con escape de fórmulas).
+    const rowToInsert = objetoAFilaHeaders(sheet, data);
     upsertFilaPorId(sheet, rowToInsert);
 
     return data;
@@ -395,7 +540,16 @@ function actualizarRegistro(nombreHoja, data) {
 
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] == data.id) {
-      const updatedRow = headers.map(header => data[header] !== undefined ? data[header] : rows[i][headers.indexOf(header)]);
+      const updatedRow = headers.map(header => {
+        let val = data[header] !== undefined ? data[header] : rows[i][headers.indexOf(header)];
+        if (typeof val === "string") {
+          const trimmed = val.trim();
+          if (trimmed.startsWith("+") || trimmed.startsWith("=") || (trimmed.startsWith("-") && isNaN(Number(trimmed)))) {
+            return "'" + trimmed;
+          }
+        }
+        return val;
+      });
       sheet.getRange(i + 1, 1, 1, updatedRow.length).setValues([updatedRow]);
       return data;
     }

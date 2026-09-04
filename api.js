@@ -91,16 +91,26 @@ const API = {
     return STORE.visibleDb(STORE.memDb());
   },
 
-  // ---- CREACIÓN (uuid + timestamps en el cliente) ----
+  // ---- CREACIÓN (códigos legibles CLI-XXXX / VEH-XXXX + uuid en segundo plano) ----
   crearCliente: async (cliente) => {
     await STORE.ready();
-    const rec = STORE.stamp(Object.assign({ id: uid(), fechaRegistro: nowISO().split("T")[0] }, cliente), true);
+    const cleanTel = (typeof UTILS !== "undefined" && UTILS.cleanTelefono) ? UTILS.cleanTelefono(cliente.telefono) : cliente.telefono;
+    const cleanCli = Object.assign({}, cliente, { telefono: cleanTel });
+    const id = cleanCli.id || ((typeof UTILS !== "undefined" && UTILS.folioCliente) ? UTILS.folioCliente(STORE.memDb().clientes) : ("CLI-" + String((STORE.memDb().clientes || []).length + 1).padStart(4, "0")));
+    const uuid = cleanCli.uuid || uid();
+    const rec = STORE.stamp(Object.assign({ id, uuid, fechaRegistro: nowISO().split("T")[0] }, cleanCli), true);
+    rec.id = id;
+    rec.uuid = uuid;
     _enqueue("crearCliente", rec);
     return rec;
   },
   crearVehiculo: async (vehiculo) => {
     await STORE.ready();
-    const rec = STORE.stamp(Object.assign({ id: uid() }, vehiculo), true);
+    const id = vehiculo.id || ((typeof UTILS !== "undefined" && UTILS.folioVehiculo) ? UTILS.folioVehiculo(STORE.memDb().vehiculos) : ("VEH-" + String((STORE.memDb().vehiculos || []).length + 1).padStart(4, "0")));
+    const uuid = vehiculo.uuid || uid();
+    const rec = STORE.stamp(Object.assign({ id, uuid }, vehiculo), true);
+    rec.id = id;
+    rec.uuid = uuid;
     _enqueue("crearVehiculo", rec);
     return rec;
   },
@@ -143,7 +153,8 @@ const API = {
   // ---- EDICIÓN ----
   actualizarCliente: async (cliente) => {
     await STORE.ready();
-    const data = Object.assign({}, cliente, { updatedAt: nowISO() });
+    const cleanTel = (typeof UTILS !== "undefined" && UTILS.cleanTelefono) ? UTILS.cleanTelefono(cliente.telefono) : cliente.telefono;
+    const data = Object.assign({}, cliente, { telefono: cleanTel, updatedAt: nowISO() });
     _enqueue("actualizarCliente", data);
     return STORE.memDb().clientes.find(c => eq(c.id, cliente.id)) || data;
   },

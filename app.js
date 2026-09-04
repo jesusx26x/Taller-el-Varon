@@ -151,21 +151,34 @@ function trasEscritura() {
   reconciliarPronto();
 }
 
+function sanitizarMemoriaLocal() {
+  if (!STATE.db) return;
+  (STATE.db.clientes || []).forEach((c, idx) => {
+    if (c.telefono === "#ERROR!" || String(c.telefono).startsWith("#")) {
+      c.telefono = "";
+    }
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(String(c.id))) {
+      c.displayId = `CLI-${String(idx + 2).padStart(4, "0")}`;
+    }
+  });
+}
+
 async function cargarDatosYRenderizar() {
   const first = _primeraCarga;
   // 1) Pinta al instante desde el caché local si hay datos (percepción de velocidad).
   const local = API.getLocalStore();
   const hayLocal = local && ((local.clientes && local.clientes.length) || (local.ordenes && local.ordenes.length) || (local.vehiculos && local.vehiculos.length));
-  if (hayLocal) { STATE.db = local; renderCurrentView(); }
+  if (hayLocal) { STATE.db = local; sanitizarMemoriaLocal(); renderCurrentView(); }
   else if (first) mostrarCargando(true);
   // 2) Reconcilia con la nube en segundo plano (la UI ya está pintada).
   try {
     STATE.db = await API.obtenerTodo();
     if (!STATE.db) STATE.db = { clientes: [], vehiculos: [], ordenes: [], detalleServicios: [], fotos: [] };
+    sanitizarMemoriaLocal();
     renderCurrentView();
   } catch (err) {
     console.error("Error al cargar datos:", err);
-    if (!STATE.db) { STATE.db = API.getLocalStore(); renderCurrentView(); }
+    if (!STATE.db) { STATE.db = API.getLocalStore(); sanitizarMemoriaLocal(); renderCurrentView(); }
   } finally {
     if (first) { mostrarCargando(false); _primeraCarga = false; }
   }
@@ -562,13 +575,22 @@ function renderListaClientes() {
       ? vehs.map(v => `<span class="badge badge-process" style="margin-right: 0.3rem;">${v.marca} ${v.modelo} (${v.placa || 'S/P'})</span>`).join(" ")
       : `<span style="color: var(--text-muted); font-size: 0.8rem;">Sin vehículos</span>`;
 
+    const telEsError = !c.telefono || c.telefono === "#ERROR!" || String(c.telefono).startsWith("#");
     const telClean = UTILS.formatWhatsApp(c.telefono);
+    const telDisplay = telEsError 
+      ? `<span style="color: var(--color-accent-red); font-size: 0.85rem;"><i class="fas fa-exclamation-triangle"></i> Sin teléfono</span>` 
+      : UTILS.escapeHtml(UTILS.cleanTelefono(c.telefono));
+    const telHtml = (!telEsError && telClean) 
+      ? `<a href="https://wa.me/${telClean}" target="_blank" style="color: #10B981; font-weight: 600;"><i class="fab fa-whatsapp"></i> ${telDisplay}</a>`
+      : telDisplay;
+
+    const idDisplay = (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(String(c.id))) ? "CLI-0002" : c.id;
 
     return `
       <tr>
-        <td><strong>${c.id}</strong></td>
+        <td><strong>${idDisplay}</strong></td>
         <td><strong>${c.nombre}</strong></td>
-        <td><a href="https://wa.me/${telClean}" target="_blank" style="color: #10B981; font-weight: 600;"><i class="fab fa-whatsapp"></i> ${c.telefono}</a></td>
+        <td>${telHtml}</td>
         <td>${c.cedula || 'N/A'}</td>
         <td>${listaVehsHtml}</td>
         <td>${UTILS.formatDate(c.fechaRegistro)}</td>
@@ -591,16 +613,25 @@ function renderListaClientes() {
         const listaVehsHtml = vehs.length > 0 
           ? vehs.map(v => `<span class="badge badge-process" style="margin-right: 0.3rem;">${v.marca} ${v.modelo} (${v.placa || 'S/P'})</span>`).join(" ")
           : `<span style="color: var(--text-muted); font-size: 0.8rem;">Sin vehículos</span>`;
+        const telEsError = !c.telefono || c.telefono === "#ERROR!" || String(c.telefono).startsWith("#");
         const telClean = UTILS.formatWhatsApp(c.telefono);
+        const telDisplay = telEsError 
+          ? `<span style="color: var(--color-accent-red); font-size: 0.85rem;"><i class="fas fa-exclamation-triangle"></i> Sin teléfono</span>` 
+          : UTILS.escapeHtml(UTILS.cleanTelefono(c.telefono));
+        const telHtml = (!telEsError && telClean) 
+          ? `<a href="https://wa.me/${telClean}" target="_blank" style="color: #10B981; font-weight: 600;"><i class="fab fa-whatsapp"></i> ${telDisplay}</a>`
+          : telDisplay;
+
+        const idDisplay = (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(String(c.id))) ? "CLI-0002" : c.id;
 
         return `
           <div class="mobile-card-item">
             <div class="mobile-card-header">
               <strong>${c.nombre}</strong>
-              <span class="badge badge-pending">${c.id}</span>
+              <span class="badge badge-pending">${idDisplay}</span>
             </div>
             <div class="mobile-card-body" style="grid-template-columns: 1fr;">
-              <div><span class="card-label">Teléfono:</span> <a href="https://wa.me/${telClean}" target="_blank" style="color: #10B981; font-weight: 600;"><i class="fab fa-whatsapp"></i> ${c.telefono}</a></div>
+              <div><span class="card-label">Teléfono:</span> ${telHtml}</div>
               ${c.cedula ? `<div><span class="card-label">Cédula:</span> ${c.cedula}</div>` : ''}
               <div><span class="card-label">Vehículos:</span> ${listaVehsHtml}</div>
             </div>
@@ -1067,6 +1098,23 @@ function initEventListeners() {
       if (c) c.style.display = "none";
     }
   });
+
+  // Formateo automático de teléfono en tiempo real (evita caracteres de fórmulas +, =)
+  const telInput = document.getElementById("cli-telefono");
+  if (telInput) {
+    telInput.addEventListener("input", (e) => {
+      let val = e.target.value.replace(/\D/g, "");
+      if (val.startsWith("1") && val.length > 10) val = val.slice(1);
+      if (val.length > 10) val = val.slice(0, 10);
+      if (val.length > 6) {
+        e.target.value = `(${val.slice(0, 3)}) ${val.slice(3, 6)}-${val.slice(6)}`;
+      } else if (val.length > 3) {
+        e.target.value = `(${val.slice(0, 3)}) ${val.slice(3)}`;
+      } else if (val.length > 0) {
+        e.target.value = `(${val}`;
+      }
+    });
+  }
   try {
     actualizarBadgeSync({
       cloud: API.isCloudMode(),
@@ -1217,7 +1265,7 @@ function initEventListeners() {
 
     const cli = {
       nombre: document.getElementById("cli-nombre").value,
-      telefono: document.getElementById("cli-telefono").value,
+      telefono: UTILS.cleanTelefono(document.getElementById("cli-telefono").value),
       cedula: document.getElementById("cli-cedula").value,
       email: document.getElementById("cli-email").value,
       notas: document.getElementById("cli-notas").value
@@ -1511,7 +1559,10 @@ function poblarSelectClientes() {
 
   const clientes = STATE.db ? (STATE.db.clientes || []) : [];
   select.innerHTML = `<option value="">-- Selecciona el cliente --</option>` +
-    clientes.map(c => `<option value="${c.id}">${c.nombre} (${c.telefono || 'Sin tel'})</option>`).join("");
+    clientes.map(c => {
+      const tel = (!c.telefono || c.telefono === "#ERROR!" || String(c.telefono).startsWith("#")) ? 'Sin tel' : UTILS.cleanTelefono(c.telefono);
+      return `<option value="${c.id}">${c.nombre} (${tel})</option>`;
+    }).join("");
 }
 
 function poblarSelectVehiculosParaCliente(clienteId) {
@@ -1631,7 +1682,8 @@ function abrirModalEditarCliente(id) {
   document.getElementById("form-nuevo-cliente").reset();
   document.getElementById("cli-edit-id").value = c.id;
   document.getElementById("cli-nombre").value = c.nombre || "";
-  document.getElementById("cli-telefono").value = c.telefono || "";
+  const telVal = (!c.telefono || c.telefono === "#ERROR!" || String(c.telefono).startsWith("#")) ? "" : UTILS.cleanTelefono(c.telefono);
+  document.getElementById("cli-telefono").value = telVal;
   document.getElementById("cli-cedula").value = c.cedula || "";
   document.getElementById("cli-email").value = c.email || "";
   document.getElementById("cli-notas").value = c.notas || "";

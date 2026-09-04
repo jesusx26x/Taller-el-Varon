@@ -129,12 +129,18 @@ function stamp(rec, isNew) {
 }
 function upsertArr(arr, obj) {
   if (!obj || obj.id === undefined) { arr.push(obj); return obj; }
-  const i = arr.findIndex(x => eq(x.id, obj.id));
+  let i = arr.findIndex(x => eq(x.id, obj.id));
+  if (i < 0 && obj.uuid) {
+    i = arr.findIndex(x => x.uuid && eq(x.uuid, obj.uuid));
+  }
   if (i >= 0) arr[i] = Object.assign({}, arr[i], obj); else arr.push(obj);
   return obj;
 }
 function mergeArr(arr, obj) {
-  const i = arr.findIndex(x => eq(x.id, obj.id));
+  let i = arr.findIndex(x => eq(x.id, obj.id));
+  if (i < 0 && obj.uuid) {
+    i = arr.findIndex(x => x.uuid && eq(x.uuid, obj.uuid));
+  }
   if (i >= 0) { arr[i] = Object.assign({}, arr[i], obj); return arr[i]; }
   arr.push(obj); return obj;
 }

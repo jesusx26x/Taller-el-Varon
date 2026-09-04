@@ -53,6 +53,7 @@ const UTILS = {
    * Ej: "829-941-9044" -> "18299419044"
    */
   formatWhatsApp: (telefono) => {
+    if (!telefono || String(telefono).startsWith("#")) return "";
     let d = String(telefono || "").replace(/\D/g, "");
     if (!d) return "";
     // Quita un "00" o "+" internacional inicial si viene así
@@ -274,6 +275,58 @@ UTILS.folioOrden = function () {
   const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
   const rand = (Math.random().toString(36).slice(2, 7) + Math.random().toString(36).slice(2, 4)).toUpperCase();
   return `ORD-${stamp}-${rand}`;
+};
+
+// Genera un código limpio y legible para clientes (CLI-0001, CLI-0002...)
+UTILS.folioCliente = function (existingList = []) {
+  let maxNum = 0;
+  (existingList || []).forEach(c => {
+    const idStr = String(c.id || "");
+    const m = idStr.match(/^CLI-(\d+)$/i);
+    if (m) {
+      const num = parseInt(m[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  });
+  if (maxNum === 0 && existingList && existingList.length > 0) {
+    maxNum = existingList.length;
+  }
+  return `CLI-${String(maxNum + 1).padStart(4, "0")}`;
+};
+
+// Genera un código limpio y legible para vehículos (VEH-0001, VEH-0002...)
+UTILS.folioVehiculo = function (existingList = []) {
+  let maxNum = 0;
+  (existingList || []).forEach(v => {
+    const idStr = String(v.id || "");
+    const m = idStr.match(/^VEH-(\d+)$/i);
+    if (m) {
+      const num = parseInt(m[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  });
+  if (maxNum === 0 && existingList && existingList.length > 0) {
+    maxNum = existingList.length;
+  }
+  return `VEH-${String(maxNum + 1).padStart(4, "0")}`;
+};
+
+// Sanea un teléfono dominicano eliminando caracteres de fórmulas (+, =) y normalizando a 10 dígitos
+UTILS.cleanTelefono = function (tel) {
+  if (!tel) return "";
+  let str = String(tel).trim();
+  if (str === "#ERROR!" || str.startsWith("#")) return "";
+  let digits = str.replace(/\D/g, "");
+  if (digits.startsWith("1") && digits.length === 11) digits = digits.slice(1);
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return str.replace(/^[+=]+/, "").trim();
+};
+
+UTILS.formatTelefono = function (tel) {
+  if (!tel || tel === "#ERROR!" || String(tel).startsWith("#")) return "Sin teléfono";
+  return UTILS.cleanTelefono(tel);
 };
 
 // Escapa texto del usuario antes de interpolarlo en HTML (evita romper el marcado / XSS).
